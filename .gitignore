@@ -1,0 +1,8 @@
+node_modules
+dist
+.env.local
+.env*.local
+*.log
+
+# النسخة القديمة قبل التحويل لمشروع Vite — محفوظة محليًا فقط كمرجع
+/jewelry-store.jsx
