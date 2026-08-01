@@ -6,3 +6,6 @@ dist
 
 # النسخة القديمة قبل التحويل لمشروع Vite — محفوظة محليًا فقط كمرجع
 /jewelry-store.jsx
+
+# ملفات مؤقتة من Supabase CLI
+supabase/.temp/

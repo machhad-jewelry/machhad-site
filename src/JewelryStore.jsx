@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { ShoppingBag, X, Plus, Minus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
+import { generateInvoicePdf } from "./invoicePdf";
 
 const LOGO_SRC =
   "data:image/png;base64," +
@@ -2878,17 +2879,27 @@ export default function JewelryStore() {
             ) : (
               <div className="flex-1 overflow-y-auto flex flex-col gap-4">
                 {cart.map((item) => (
-                  <div key={item.id + "__" + item.size} className="flex items-center gap-3 border-b pb-4" style={{ borderColor: THEME.surfaceLine }}>
-                    <div className="w-14"><ProductVisual product={item} /></div>
-                    <div className="flex-1">
-                      <p className="text-sm" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
+                  <div key={item.id + "__" + item.size} className="flex items-start gap-3 border-b pb-4" style={{ borderColor: THEME.surfaceLine }}>
+                    <div className="w-14 flex-shrink-0"><ProductVisual product={item} /></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
                       {item.size && <p className="text-[11px]" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
-                      <p className="text-xs" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.price)}</p>
+                      <p className="text-xs" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.price)} {T.unitPrice[lang] ? `(${T.unitPrice[lang]})` : ""}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button onClick={() => changeQty(item.id, item.size, -1)} className="p-1 rounded-full border" style={{ borderColor: THEME.surfaceLine }}><Minus size={12} color={THEME.ivoryDim} /></button>
                         <span className="text-xs">{item.qty}</span>
                         <button onClick={() => changeQty(item.id, item.size, 1)} className="p-1 rounded-full border" style={{ borderColor: THEME.surfaceLine }}><Plus size={12} color={THEME.ivoryDim} /></button>
                       </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setCart((prev) => prev.filter((i) => !(i.id === item.id && i.size === item.size)))}
+                        aria-label={T.deleteProduct[lang]}
+                        className="p-1"
+                      >
+                        <X size={14} color={THEME.ivoryDim} />
+                      </button>
+                      <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price * item.qty)}</span>
                     </div>
                   </div>
                 ))}
@@ -3019,6 +3030,27 @@ export default function JewelryStore() {
                     setStockError(false);
                     setCountryError(false);
                     setOrderPlaced(true);
+
+                    // إرسال فاتورة PDF لصاحب المتجر بالإيميل — لا يوقف عملية الشراء إذا فشل
+                    try {
+                      const total = newOrder.items.reduce((s, it) => s + it.price * it.qty, 0);
+                      const pdfBase64 = generateInvoicePdf(newOrder, products, T.brand.en);
+                      supabase.functions
+                        .invoke("send-invoice", {
+                          body: {
+                            orderId: newOrder.id,
+                            customerName: newOrder.customerName,
+                            customerPhone: newOrder.customerPhone,
+                            country: newOrder.country,
+                            payment: newOrder.payment,
+                            total,
+                            pdfBase64,
+                          },
+                        })
+                        .catch((err) => console.error("send-invoice failed:", err));
+                    } catch (err) {
+                      console.error("PDF generation failed:", err);
+                    }
                   }}
                   className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
                 >
