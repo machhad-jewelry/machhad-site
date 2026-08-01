@@ -5,7 +5,7 @@ import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
 
 // دومين مخصص للإدارة فقط — المتجر العام ما بيعرض أي رابط أو مدخل للوحة الإدارة إطلاقًا
-const ADMIN_HOSTNAMES = ["machhadjewelry.online", "www.machhadjewelry.online"];
+const ADMIN_HOSTNAMES = ["machhadjewelry.site", "www.machhadjewelry.site"];
 const IS_ADMIN_DOMAIN =
   typeof window !== "undefined" &&
   (ADMIN_HOSTNAMES.includes(window.location.hostname) ||
