@@ -488,15 +488,15 @@ const LOGO_SRC =
   "2dmpZ6qBzgu76l/YXVnjT7zS83ZcPI2qzEG2t3dQb2/L9Lrzf1Kl29EB2dkJ/Qree/r44CX02VQKJKVSKQBpzHS3zD9XHZNKpWiqzsiLjNOhuVuzZo2xZg2wcePM8Cr+HMfjROb8eCwLkUwmaWRkhLZsOZTv/7990R3XqfXlBPJIq/HFUvlmF+0spmT1iM2B/9T3/xPd87judUSWiP7/aGwOZX3QKztWR3PY+VMciP5sZeXlDKiX+f0sjv8UeCi+PosTM75emXjeLGbx/1+Zm5WlWRytPp5dKy/nDTieQZ5W" +
   "unF2gF8cx1JuedZ6ncUs/rRyN4vZdTG7VmbglDv1Pp5y4fX2VkMMLS1bpurlzw708Y//7NjNYhazmMUs/q81EKZvZs9pAfrnQDabxSxmMYtZzGIWM4tjCTE8ryJT+hVoBTqLWcxiFrOYxSz+L8YRRTNmMYtZzGIWs5jFLIBZ42AWs5jFLGYxi//dm/xM/d0s2W4Ws5jFLGYxi/8lON7yjjyDxsYsZjGLWcxiFrP4X4xZA2EWs5jFLGYxi1nMYhazmMUsZjGL/634fwHhKxAUo7XsVQAAAABJRU5ErkJggg==";
 const THEME = {
-  bg: "#FFFFFF",
-  bgSoft: "#F6F3EF",
-  surface: "#FFFFFF",
-  surfaceLine: "rgba(28,28,28,0.12)",
+  bg: "#111111",
+  bgSoft: "#1B1B1B",
+  surface: "#1A1A1A",
+  surfaceLine: "rgba(255,255,255,0.12)",
   gold: "#2E5D55",
-  goldSoft: "#1F4A44",
-  ivory: "#2C2C2C",
-  ivoryDim: "#78736D",
-  garnet: "#9A6B5A",
+  goldSoft: "#7DBFB0",
+  ivory: "#F1EDE6",
+  ivoryDim: "#A39C92",
+  garnet: "#C98A73",
 };
 
 const CURRENCIES = [
