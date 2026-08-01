@@ -4,6 +4,13 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
 
+// دومين مخصص للإدارة فقط — المتجر العام ما بيعرض أي رابط أو مدخل للوحة الإدارة إطلاقًا
+const ADMIN_HOSTNAMES = ["machhadjewelry.site", "www.machhadjewelry.site"];
+const IS_ADMIN_DOMAIN =
+  typeof window !== "undefined" &&
+  (ADMIN_HOSTNAMES.includes(window.location.hostname) ||
+    new URLSearchParams(window.location.search).get("admin") === "1");
+
 const LOGO_SRC =
   "data:image/png;base64," +
   "iVBORw0KGgoAAAANSUhEUgAAAggAAAElCAYAAACBJhoWAAEAAElEQVR42uydd3xVRdrHf8/MObek90LvICAtARFpUVFRsK2Jvbvgquja1rbrTewNewsW7CWxgxUkFCsm9FCll5Dec+8958w87x83Uba967oqqOf7+VzIPfe0mTPl9zzznBnAxcXFxcXlF4AZ9KOPxY8/Fv/bsS4u+wW30Lq4uLi4uLj8RCrcFRYuLi77yZL/9aaZf29pJtcIdXFxcXFx+c+d5e/pui6uonVxcXH5MW2P23G5uLi4uLi4uMLE" +
@@ -2255,7 +2262,7 @@ export default function JewelryStore() {
   const [customerInfoError, setCustomerInfoError] = useState(false);
   const [stockError, setStockError] = useState(false);
   const [countryError, setCountryError] = useState(false);
-  const [adminView, setAdminView] = useState(null); // null | "login" | "dashboard"
+  const [adminView, setAdminView] = useState(IS_ADMIN_DOMAIN ? "login" : null); // null | "login" | "dashboard"
   const [adminTab, setAdminTab] = useState("add");
   const [rates, setRates] = useState(DEFAULT_RATES);
   const [metalPrices, setMetalPrices] = useState(DEFAULT_METAL_PRICES);
@@ -2268,7 +2275,10 @@ export default function JewelryStore() {
 
   // تحميل الجلسة الحالية (إن وجدت) ومتابعة تغيّرات تسجيل الدخول
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (IS_ADMIN_DOMAIN && data.session) setAdminView("dashboard");
+    });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
     });
@@ -2418,14 +2428,17 @@ export default function JewelryStore() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setAdminView(null)}
+              onClick={() => {
+                if (IS_ADMIN_DOMAIN) window.location.href = "https://machhadjewelry.com";
+                else setAdminView(null);
+              }}
               className="text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-sm border tracking-widest uppercase whitespace-nowrap"
               style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
             >
               {T.backToStore[lang]}
             </button>
             <button
-              onClick={() => { supabase.auth.signOut(); setAdminView(null); }}
+              onClick={() => { supabase.auth.signOut(); setAdminView(IS_ADMIN_DOMAIN ? "login" : null); }}
               className="text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-sm border tracking-widest uppercase whitespace-nowrap"
               style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
             >
@@ -2773,13 +2786,6 @@ export default function JewelryStore() {
         <img src={LOGO_SRC} alt={T.brand[lang]} className="mx-auto mb-4 w-44 h-auto object-contain" />
         <p className="text-xs mt-3 tracking-wide" style={{ color: THEME.ivoryDim }}>{T.footerTagline[lang]}</p>
         <p className="text-xs mt-5" style={{ color: THEME.ivoryDim, opacity: 0.7 }}>© 2026 {T.brand[lang]} — {T.rights[lang]}</p>
-        <button
-          onClick={() => setAdminView(session ? "dashboard" : "login")}
-          className="text-[11px] mt-6 underline opacity-60"
-          style={{ color: THEME.ivoryDim }}
-        >
-          {T.admin[lang]}
-        </button>
       </footer>
 
       {/* Product modal */}
@@ -3032,21 +3038,11 @@ export default function JewelryStore() {
                     setOrderPlaced(true);
 
                     // إرسال فاتورة PDF لصاحب المتجر بالإيميل — لا يوقف عملية الشراء إذا فشل
+                    // الوظيفة الخادمية بتتحقق من الطلب بقاعدة البيانات وتجيب بياناته الحقيقية بنفسها
                     try {
-                      const total = newOrder.items.reduce((s, it) => s + it.price * it.qty, 0);
                       const pdfBase64 = generateInvoicePdf(newOrder, products, T.brand.en);
                       supabase.functions
-                        .invoke("send-invoice", {
-                          body: {
-                            orderId: newOrder.id,
-                            customerName: newOrder.customerName,
-                            customerPhone: newOrder.customerPhone,
-                            country: newOrder.country,
-                            payment: newOrder.payment,
-                            total,
-                            pdfBase64,
-                          },
-                        })
+                        .invoke("send-invoice", { body: { orderId: newOrder.id, pdfBase64 } })
                         .catch((err) => console.error("send-invoice failed:", err));
                     } catch (err) {
                       console.error("PDF generation failed:", err);
