@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -518,6 +518,26 @@ const DEFAULT_RATES = { USD: 1, XAF: 605, XOF: 605 };
 // أسعار المعادن الأساسية (بالدولار) — قابلة للتعديل من لوحة الإدارة
 const DEFAULT_METAL_PRICES = { goldOunce: 2650, silverOunce: 30 };
 const DEFAULT_REPS = ["محمود", "رشاد", "جميل"];
+const DEFAULT_CATEGORIES = [
+  { id: "rings", name: { ar: "خواتم", en: "Rings", fr: "Bagues" } },
+  { id: "necklaces", name: { ar: "قلائد", en: "Necklaces", fr: "Colliers" } },
+  { id: "bracelets", name: { ar: "أساور", en: "Bracelets", fr: "Bracelets" } },
+  { id: "masabih", name: { ar: "مسابح", en: "Prayer Beads", fr: "Chapelets" } },
+];
+
+function categoryRowToApp(row) {
+  return { id: row.id, name: { ar: row.name_ar || "", en: row.name_en || "", fr: row.name_fr || "" } };
+}
+function categoryAppToRow(c) {
+  return { id: c.id, name_ar: c.name.ar, name_en: c.name.en, name_fr: c.name.fr };
+}
+function slugifyCategoryId(s) {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9؀-ۿ]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 // يولّد باركود مكوّن من ٦ أرقام فقط، مع تفادي التكرار مع الباركودات الموجودة
 function generateBarcode(existingBarcodes = []) {
@@ -640,10 +660,6 @@ const T = {
   },
   cta: { ar: "استكشف المجموعة", en: "Explore the Collection", fr: "Découvrir la Collection" },
   all: { ar: "الكل", en: "All", fr: "Tout" },
-  rings: { ar: "خواتم", en: "Rings", fr: "Bagues" },
-  necklaces: { ar: "قلائد", en: "Necklaces", fr: "Colliers" },
-  bracelets: { ar: "أساور", en: "Bracelets", fr: "Bracelets" },
-  masabih: { ar: "مسابح", en: "Prayer Beads", fr: "Chapelets" },
   material: { ar: "الخامة", en: "Material", fr: "Matériau" },
   addToCart: { ar: "أضف إلى السلة", en: "Add to Cart", fr: "Ajouter au Panier" },
   cart: { ar: "السلة", en: "Cart", fr: "Panier" },
@@ -769,6 +785,12 @@ const T = {
   confirmDeleteRep: { ar: "حذف هذا المندوب؟", en: "Delete this rep?", fr: "Supprimer ce représentant ?" },
   repAlreadyExists: { ar: "هذا المندوب موجود مسبقًا", en: "This rep already exists", fr: "Ce représentant existe déjà" },
   repUpdated: { ar: "تم تعديل اسم المندوب", en: "Rep name updated", fr: "Nom du représentant mis à jour" },
+  tabCategories: { ar: "التصنيفات", en: "Categories", fr: "Catégories" },
+  addCategory: { ar: "إضافة تصنيف", en: "Add Category", fr: "Ajouter une Catégorie" },
+  categoryAdded: { ar: "تمت إضافة التصنيف", en: "Category added", fr: "Catégorie ajoutée" },
+  categoryDeleted: { ar: "تم حذف التصنيف", en: "Category deleted", fr: "Catégorie supprimée" },
+  categoryUpdated: { ar: "تم تعديل التصنيف", en: "Category updated", fr: "Catégorie mise à jour" },
+  confirmDeleteCategory: { ar: "حذف هذا التصنيف؟", en: "Delete this category?", fr: "Supprimer cette catégorie ?" },
   barcodeLabel: { ar: "الباركود", en: "Barcode", fr: "Code-barres" },
   tabSales: { ar: "المبيعات", en: "Sales", fr: "Ventes" },
   colDate: { ar: "التاريخ", en: "Date", fr: "Date" },
@@ -842,7 +864,6 @@ const COUNTRY_CURRENCY = {
   lebanon: "USD",
 };
 
-const CATS = ["all", "rings", "necklaces", "bracelets", "masabih"];
 
 function Gemstone({ color, size = 56 }) {
   return (
@@ -921,7 +942,7 @@ function ProductVisual({ product, imageIndex = 0 }) {
   );
 }
 
-function AdminAddProduct({ lang, onSave, reps, products }) {
+function AdminAddProduct({ lang, onSave, reps, products, categories }) {
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
@@ -1060,8 +1081,8 @@ function AdminAddProduct({ lang, onSave, reps, products }) {
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
           <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
-            {CATS.filter((c) => c !== "all").map((c) => (
-              <option key={c} value={c} style={{ background: THEME.surface }}>{T[c][lang]}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.name[lang]}</option>
             ))}
           </select>
         </div>
@@ -1271,6 +1292,138 @@ function AdminReps({ lang, reps, setReps }) {
   );
 }
 
+function AdminCategories({ lang, categories, setCategories }) {
+  const [form, setForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
+  const [confirmId, setConfirmId] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const addCategory = async () => {
+    const nameAr = form.nameAr.trim();
+    const nameEn = form.nameEn.trim();
+    const nameFr = form.nameFr.trim();
+    if (!nameAr && !nameEn) {
+      setMsg(T.fillRequired[lang]);
+      return;
+    }
+    let id = slugifyCategoryId(nameEn || nameAr);
+    if (!id || categories.some((c) => c.id === id)) id = "cat-" + Date.now();
+    const row = { id, name_ar: nameAr || nameEn, name_en: nameEn || nameAr, name_fr: nameFr || nameEn || nameAr };
+    const { error } = await supabase.from("categories").insert(row);
+    if (error) return;
+    setCategories([...categories, categoryRowToApp(row)]);
+    setForm({ nameAr: "", nameEn: "", nameFr: "" });
+    setMsg(T.categoryAdded[lang]);
+  };
+
+  const startEdit = (c) => {
+    setEditingId(c.id);
+    setEditForm({ nameAr: c.name.ar, nameEn: c.name.en, nameFr: c.name.fr });
+  };
+
+  const saveEdit = async (id) => {
+    const nameAr = editForm.nameAr.trim();
+    const nameEn = editForm.nameEn.trim();
+    const nameFr = editForm.nameFr.trim();
+    if (!nameAr && !nameEn) return;
+    const { error } = await supabase
+      .from("categories")
+      .update({ name_ar: nameAr, name_en: nameEn, name_fr: nameFr })
+      .eq("id", id);
+    if (error) return;
+    setCategories(categories.map((c) => (c.id === id ? { ...c, name: { ar: nameAr, en: nameEn, fr: nameFr } } : c)));
+    setEditingId(null);
+    setMsg(T.categoryUpdated[lang]);
+  };
+
+  const deleteCategory = async (id) => {
+    const { error } = await supabase.from("categories").delete().eq("id", id);
+    if (error) return;
+    setCategories(categories.filter((c) => c.id !== id));
+    setConfirmId(null);
+    setMsg(T.categoryDeleted[lang]);
+  };
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+        <input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} placeholder={T.nameAr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+        <input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} placeholder={T.nameEn[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+        <input value={form.nameFr} onChange={(e) => setForm({ ...form, nameFr: e.target.value })} placeholder={T.nameFr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+      </div>
+      <button onClick={addCategory} className="w-full mb-6 px-4 py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold">
+        {T.addCategory[lang]}
+      </button>
+
+      {msg && <p className="text-sm mb-4 text-center" style={{ color: THEME.goldSoft }}>{msg}</p>}
+
+      <div className="flex flex-col gap-2">
+        {categories.map((c) => (
+          <div
+            key={c.id}
+            className="flex flex-wrap items-center gap-2 p-3 rounded-sm"
+            style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+          >
+            {editingId === c.id ? (
+              <>
+                <input value={editForm.nameAr} onChange={(e) => setEditForm({ ...editForm, nameAr: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                <input value={editForm.nameEn} onChange={(e) => setEditForm({ ...editForm, nameEn: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                <input value={editForm.nameFr} onChange={(e) => setEditForm({ ...editForm, nameFr: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                <button onClick={() => saveEdit(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
+                  {T.saveChanges[lang]}
+                </button>
+                <button
+                  onClick={() => setEditingId(null)}
+                  className="text-xs px-3 py-1.5 rounded-sm border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.confirmCancel[lang]}
+                </button>
+              </>
+            ) : confirmId === c.id ? (
+              <>
+                <span className="flex-1 text-sm" style={{ color: THEME.ivory }}>{c.name[lang]}</span>
+                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.confirmDeleteCategory[lang]}</span>
+                <button onClick={() => deleteCategory(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
+                  {T.confirmYes[lang]}
+                </button>
+                <button
+                  onClick={() => setConfirmId(null)}
+                  className="text-xs px-3 py-1.5 rounded-sm border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.confirmCancel[lang]}
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm" style={{ color: THEME.ivory }}>{c.name[lang]}</span>
+                <button
+                  onClick={() => startEdit(c)}
+                  className="text-xs px-3 py-1.5 rounded-sm border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.editProduct[lang]}
+                </button>
+                <button
+                  onClick={() => setConfirmId(c.id)}
+                  className="text-xs px-3 py-1.5 rounded-sm border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.deleteProduct[lang]}
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AdminMetalPrices({ lang, metalPrices, setMetalPrices }) {
   const [draft, setDraft] = useState({
     goldOunce: String(metalPrices.goldOunce),
@@ -1421,7 +1574,7 @@ function AdminExchangeRates({ lang, rates, setRates }) {
   );
 }
 
-function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
+function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories }) {
   const [form, setForm] = useState({
     nameAr: product.name.ar, nameEn: product.name.en, nameFr: product.name.fr,
     matAr: product.mat.ar, matEn: product.mat.en, matFr: product.mat.fr,
@@ -1543,8 +1696,8 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
             <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
-              {CATS.filter((c) => c !== "all").map((c) => (
-                <option key={c} value={c} style={{ background: THEME.surface }}>{T[c][lang]}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.name[lang]}</option>
               ))}
             </select>
           </div>
@@ -1615,7 +1768,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
   );
 }
 
-function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps }) {
+function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps, categories }) {
   const [confirmId, setConfirmId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [msg, setMsg] = useState("");
@@ -1677,7 +1830,7 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
               <div className="w-14 h-14 flex-shrink-0"><ProductVisual product={p} /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm truncate" style={{ color: THEME.ivory }}>{p.name[lang]}</p>
-                <p className="text-xs" style={{ color: THEME.ivoryDim }}>{T[p.cat] ? T[p.cat][lang] : p.cat} · {fmtPrice(p.price)}</p>
+                <p className="text-xs" style={{ color: THEME.ivoryDim }}>{(categories.find((c) => c.id === p.cat)?.name[lang]) || p.cat} · {fmtPrice(p.price)}</p>
                 {p.barcode && <p className="text-[10px] mt-0.5" style={{ color: THEME.ivoryDim, opacity: 0.7 }}>{T.barcodeLabel[lang]}: {p.barcode}</p>}
                 {p.hidden && <p className="text-[10px] mt-0.5" style={{ color: THEME.garnet }}>{T.hiddenBadge[lang]}</p>}
               </div>
@@ -1731,6 +1884,7 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
           lang={lang}
           product={editingProduct}
           reps={reps}
+          categories={categories}
           onCancel={() => setEditingId(null)}
           onSave={(updated) => {
             onEdit(updated);
@@ -2288,6 +2442,7 @@ export default function JewelryStore() {
   const [rates, setRates] = useState(DEFAULT_RATES);
   const [metalPrices, setMetalPrices] = useState(DEFAULT_METAL_PRICES);
   const [reps, setReps] = useState(DEFAULT_REPS);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [session, setSession] = useState(null);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -2309,13 +2464,14 @@ export default function JewelryStore() {
   // تحميل البيانات الأساسية من Supabase عند فتح الموقع
   useEffect(() => {
     const loadData = async () => {
-      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes] = await Promise.all([
+      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes] = await Promise.all([
         supabase.from("products").select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
         supabase.from("order_items").select("*"),
         supabase.from("reps").select("*").order("id"),
         supabase.from("exchange_rates").select("*"),
         supabase.from("metal_prices").select("*").eq("id", 1).maybeSingle(),
+        supabase.from("categories").select("*").order("created_at"),
       ]);
 
       if (productsRes.data) setProducts(productsRes.data.map(productRowToApp));
@@ -2328,6 +2484,7 @@ export default function JewelryStore() {
         setOrders(ordersRes.data.map((row) => orderRowToApp(row, itemsByOrder[row.id] || [])));
       }
       if (repsRes.data) setReps(repsRes.data.map((r) => r.name));
+      if (categoriesRes.data && categoriesRes.data.length) setCategories(categoriesRes.data.map(categoryRowToApp));
       if (ratesRes.data) {
         const map = { USD: 1 };
         ratesRes.data.forEach((r) => { map[r.currency] = Number(r.rate); });
@@ -2520,6 +2677,7 @@ export default function JewelryStore() {
               { id: "inventory", label: T.tabInventory[lang], Icon: Boxes },
               { id: "metals", label: T.tabMetalPrices[lang], Icon: Landmark },
               { id: "reps", label: T.tabReps[lang], Icon: Users },
+              { id: "categories", label: T.tabCategories[lang], Icon: Tag },
             ].map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -2546,6 +2704,7 @@ export default function JewelryStore() {
               }}
               reps={reps}
               products={products}
+              categories={categories}
             />
           )}
           {adminTab === "manage" && (
@@ -2571,6 +2730,7 @@ export default function JewelryStore() {
                 setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
               }}
               reps={reps}
+              categories={categories}
             />
           )}
           {adminTab === "sales" && (
@@ -2590,6 +2750,9 @@ export default function JewelryStore() {
           )}
           {adminTab === "reps" && (
             <AdminReps lang={lang} reps={reps} setReps={setReps} />
+          )}
+          {adminTab === "categories" && (
+            <AdminCategories lang={lang} categories={categories} setCategories={setCategories} />
           )}
         </div>
       </div>
@@ -2845,18 +3008,29 @@ export default function JewelryStore() {
       {/* Category filters */}
       <section id="shop" className="px-5 sm:px-10 pt-6 pb-2">
         <div className="flex flex-wrap justify-center gap-5 sm:gap-8">
-          {CATS.map((c) => (
+          <button
+            onClick={() => setCategory("all")}
+            className="pb-1.5 text-[11px] uppercase transition-colors"
+            style={{
+              letterSpacing: "0.16em",
+              color: category === "all" ? THEME.goldSoft : THEME.ivoryDim,
+              borderBottom: category === "all" ? `1.5px solid ${THEME.gold}` : "1.5px solid transparent",
+            }}
+          >
+            {T.all[lang]}
+          </button>
+          {categories.map((c) => (
             <button
-              key={c}
-              onClick={() => setCategory(c)}
+              key={c.id}
+              onClick={() => setCategory(c.id)}
               className="pb-1.5 text-[11px] uppercase transition-colors"
               style={{
                 letterSpacing: "0.16em",
-                color: category === c ? THEME.goldSoft : THEME.ivoryDim,
-                borderBottom: category === c ? `1.5px solid ${THEME.gold}` : "1.5px solid transparent",
+                color: category === c.id ? THEME.goldSoft : THEME.ivoryDim,
+                borderBottom: category === c.id ? `1.5px solid ${THEME.gold}` : "1.5px solid transparent",
               }}
             >
-              {T[c][lang]}
+              {c.name[lang]}
             </button>
           ))}
         </div>

@@ -7,6 +7,7 @@ drop table if exists products cascade;
 drop table if exists reps cascade;
 drop table if exists exchange_rates cascade;
 drop table if exists metal_prices cascade;
+drop table if exists categories cascade;
 
 create table products (
   id text primary key,
@@ -54,6 +55,14 @@ create table reps (
   name text unique not null
 );
 
+create table categories (
+  id text primary key,
+  name_ar text not null,
+  name_en text not null,
+  name_fr text not null,
+  created_at timestamptz not null default now()
+);
+
 create table exchange_rates (
   currency text primary key,
   rate numeric not null
@@ -74,6 +83,7 @@ alter table order_items enable row level security;
 alter table reps enable row level security;
 alter table exchange_rates enable row level security;
 alter table metal_prices enable row level security;
+alter table categories enable row level security;
 
 -- المنتجات: قراءة للجميع، تعديل للإدارة المسجّلة دخول فقط
 create policy "products_public_read" on products for select using (true);
@@ -105,7 +115,17 @@ create policy "metals_public_read" on metal_prices for select using (true);
 create policy "metals_admin_write" on metal_prices for all
   to authenticated using (true) with check (true);
 
+-- التصنيفات: قراءة للجميع (تظهر بفلتر المتجر ونموذج المنتج)، تعديل للإدارة فقط
+create policy "categories_public_read" on categories for select using (true);
+create policy "categories_admin_write" on categories for all
+  to authenticated using (true) with check (true);
+
 -- بيانات ابتدائية لأسعار الصرف والمعادن
 insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);
 insert into metal_prices (id, gold_ounce, silver_ounce) values (1, 2650, 30);
 insert into reps (name) values ('محمود'), ('رشاد'), ('جميل');
+insert into categories (id, name_ar, name_en, name_fr) values
+  ('rings', 'خواتم', 'Rings', 'Bagues'),
+  ('necklaces', 'قلائد', 'Necklaces', 'Colliers'),
+  ('bracelets', 'أساور', 'Bracelets', 'Bracelets'),
+  ('masabih', 'مسابح', 'Prayer Beads', 'Chapelets');
