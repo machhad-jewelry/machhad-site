@@ -16,6 +16,7 @@ create table products (
   mat_ar text, mat_en text, mat_fr text,
   desc_ar text, desc_en text, desc_fr text,
   price numeric not null default 0,
+  original_price numeric,
   cost numeric not null default 0,
   stock integer not null default 0,
   sizes text[] not null default '{}',

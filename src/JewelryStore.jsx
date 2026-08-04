@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, Minus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -537,6 +537,8 @@ function generateOrderId(existingIds = []) {
   return id;
 }
 
+const cartKey = (item) => item.id + "__" + (item.size || "");
+
 // تحويل صفوف قاعدة البيانات (Supabase) من/إلى شكل الكائنات المستخدم بالواجهة
 
 function productRowToApp(row) {
@@ -548,6 +550,7 @@ function productRowToApp(row) {
     mat: { ar: row.mat_ar || "", en: row.mat_en || "", fr: row.mat_fr || "" },
     desc: { ar: row.desc_ar || "", en: row.desc_en || "", fr: row.desc_fr || "" },
     price: Number(row.price) || 0,
+    originalPrice: Number(row.original_price) || 0,
     cost: Number(row.cost) || 0,
     stock: row.stock ?? 0,
     sizes: row.sizes || [],
@@ -569,6 +572,7 @@ function productAppToRow(p) {
     mat_ar: p.mat?.ar || "", mat_en: p.mat?.en || "", mat_fr: p.mat?.fr || "",
     desc_ar: p.desc?.ar || "", desc_en: p.desc?.en || "", desc_fr: p.desc?.fr || "",
     price: p.price || 0,
+    original_price: p.originalPrice || null,
     cost: p.cost || 0,
     stock: p.stock || 0,
     sizes: p.sizes || [],
@@ -645,6 +649,8 @@ const T = {
   cart: { ar: "السلة", en: "Cart", fr: "Panier" },
   emptyCart: { ar: "سلتك فارغة حاليًا", en: "Your cart is currently empty", fr: "Votre panier est vide" },
   subtotal: { ar: "الإجمالي", en: "Subtotal", fr: "Sous-total" },
+  selectAll: { ar: "تحديد الكل", en: "Select All", fr: "Tout sélectionner" },
+  selectItemsNote: { ar: "اختر منتجًا واحدًا على الأقل لإتمام الشراء", en: "Select at least one item to checkout", fr: "Sélectionnez au moins un article pour commander" },
   checkout: { ar: "إتمام الشراء", en: "Checkout", fr: "Commander" },
   close: { ar: "إغلاق", en: "Close", fr: "Fermer" },
   quantity: { ar: "الكمية", en: "Quantity", fr: "Quantité" },
@@ -694,6 +700,7 @@ const T = {
   descLabel: { ar: "الوصف", en: "Description", fr: "Description" },
   categoryLabel: { ar: "التصنيف", en: "Category", fr: "Catégorie" },
   priceLabel: { ar: "سعر البيع ($)", en: "Sale Price ($)", fr: "Prix de Vente ($)" },
+  originalPriceLabel: { ar: "السعر قبل الخصم ($) - اختياري", en: "Original Price ($) - optional", fr: "Prix Original ($) - optionnel" },
   costLabel: { ar: "التكلفة ($)", en: "Cost ($)", fr: "Coût ($)" },
   stockLabel: { ar: "الكمية المتوفرة", en: "Stock Quantity", fr: "Quantité en Stock" },
   colorLabel: { ar: "لون الحجر", en: "Gem Color", fr: "Couleur de la Pierre" },
@@ -917,7 +924,7 @@ function ProductVisual({ product, imageIndex = 0 }) {
 function AdminAddProduct({ lang, onSave, reps, products }) {
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
-    descAr: "", descEn: "", descFr: "", cat: "rings", price: "", cost: "", stock: "",
+    descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
     color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
   });
   const [msg, setMsg] = useState("");
@@ -976,6 +983,7 @@ function AdminAddProduct({ lang, onSave, reps, products }) {
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
       price: Number(form.price) || 0,
+      originalPrice: Number(form.originalPrice) || 0,
       cost: Number(form.cost) || 0,
       stock: Number(form.stock) || 0,
       sizes: form.sizesText.split(",").map((s) => s.trim()).filter(Boolean),
@@ -987,7 +995,7 @@ function AdminAddProduct({ lang, onSave, reps, products }) {
     setTimeout(() => setMsg(""), 2000);
     setForm({
       nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
-      descAr: "", descEn: "", descFr: "", cat: "rings", price: "", cost: "", stock: "",
+      descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
       color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
     });
   };
@@ -1060,6 +1068,10 @@ function AdminAddProduct({ lang, onSave, reps, products }) {
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
           <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+        </div>
+        <div>
+          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.originalPriceLabel[lang]}</label>
+          <input type="number" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
         </div>
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.costLabel[lang]}</label>
@@ -1414,7 +1426,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
     nameAr: product.name.ar, nameEn: product.name.en, nameFr: product.name.fr,
     matAr: product.mat.ar, matEn: product.mat.en, matFr: product.mat.fr,
     descAr: product.desc.ar, descEn: product.desc.en, descFr: product.desc.fr,
-    cat: product.cat, price: String(product.price), cost: String(product.cost || 0), stock: String(product.stock || 0),
+    cat: product.cat, price: String(product.price), originalPrice: String(product.originalPrice || ""), cost: String(product.cost || 0), stock: String(product.stock || 0),
     color: product.color || "#B9A576",
     countries: product.countries || [],
     sizesText: (product.sizes || []).join(", "),
@@ -1474,6 +1486,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
       price: Number(form.price) || 0,
+      originalPrice: Number(form.originalPrice) || 0,
       cost: Number(form.cost) || 0,
       stock: Number(form.stock) || 0,
       sizes: form.sizesText.split(",").map((s) => s.trim()).filter(Boolean),
@@ -1538,6 +1551,10 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps }) {
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
             <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.originalPriceLabel[lang]}</label>
+            <input type="number" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
           </div>
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.costLabel[lang]}</label>
@@ -2242,6 +2259,7 @@ export default function JewelryStore() {
   const [country, setCountry] = useState("all");
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedCartKeys, setSelectedCartKeys] = useState([]);
   const [selected, setSelected] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(null);
@@ -2392,18 +2410,36 @@ export default function JewelryStore() {
   };
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  const subtotal = cart.reduce((s, i) => s + i.qty * i.price, 0);
 
-  // بلدان الشحن المتوفرة فعليًا لكل القطع الموجودة بالسلة حاليًا
+  // تُبقي عناصر السلة المحدَّدة متزامنة: عناصر جديدة تُحدَّد تلقائيًا، والمحذوفة تُزال من التحديد
+  useEffect(() => {
+    setSelectedCartKeys((prev) => {
+      const keys = cart.map(cartKey);
+      const kept = prev.filter((k) => keys.includes(k));
+      const added = keys.filter((k) => !prev.includes(k));
+      return [...kept, ...added];
+    });
+  }, [cart]);
+
+  const toggleCartItem = (key) =>
+    setSelectedCartKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const toggleSelectAllCartItems = () =>
+    setSelectedCartKeys((prev) => (prev.length === cart.length ? [] : cart.map(cartKey)));
+
+  const selectedCart = cart.filter((i) => selectedCartKeys.includes(cartKey(i)));
+  const subtotal = selectedCart.reduce((s, i) => s + i.qty * i.price, 0);
+
+  // بلدان الشحن المتوفرة فعليًا لكل القطع المحدَّدة للشراء حاليًا
   const orderCountryOptions = COUNTRIES.filter((c) =>
-    cart.every((i) => (products.find((p) => p.id === i.id) || i).countries?.includes(c.id))
+    selectedCart.every((i) => (products.find((p) => p.id === i.id) || i).countries?.includes(c.id))
   );
 
   useEffect(() => {
     if (orderCountryOptions.length && !orderCountryOptions.some((c) => c.id === orderCountry)) {
       setOrderCountry(orderCountryOptions[0].id);
     }
-  }, [cart, orderCountryOptions.map((c) => c.id).join(",")]);
+  }, [cart, selectedCartKeys.join(","), orderCountryOptions.map((c) => c.id).join(",")]);
 
   const fmtPrice = (usd) => {
     const cur = CURRENCIES.find((c) => c.id === currency) || CURRENCIES[0];
@@ -2423,13 +2459,6 @@ export default function JewelryStore() {
       if (found) return prev.map((i) => (i.id === product.id && i.size === finalSize ? { ...i, qty: i.qty + addQty } : i));
       return [...prev, { ...product, size: finalSize, qty: addQty }];
     });
-  };
-  const changeQty = (id, size, delta) => {
-    setCart((prev) =>
-      prev
-        .map((i) => (i.id === id && i.size === size ? { ...i, qty: Math.min(i.qty + delta, i.stock ?? Infinity) } : i))
-        .filter((i) => i.qty > 0)
-    );
   };
 
   if (adminView === "dashboard") {
@@ -2963,96 +2992,158 @@ export default function JewelryStore() {
               <button onClick={() => setCartOpen(false)}><X size={20} color={THEME.ivoryDim} /></button>
             </div>
 
-            {cart.length === 0 ? (
-              <p className="text-sm text-center mt-10" style={{ color: THEME.ivoryDim }}>{T.emptyCart[lang]}</p>
-            ) : (
-              <div className="flex-1 overflow-y-auto flex flex-col gap-4">
-                {cart.map((item) => (
-                  <div key={item.id + "__" + item.size} className="flex items-start gap-3 border-b pb-4" style={{ borderColor: THEME.surfaceLine }}>
-                    <div className="w-14 flex-shrink-0"><ProductVisual product={item} /></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
-                      {item.size && <p className="text-[11px]" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
-                      <p className="text-xs" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.price)} {T.unitPrice[lang] ? `(${T.unitPrice[lang]})` : ""}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <button onClick={() => changeQty(item.id, item.size, -1)} className="p-1 rounded-full border" style={{ borderColor: THEME.surfaceLine }}><Minus size={12} color={THEME.ivoryDim} /></button>
-                        <span className="text-xs">{item.qty}</span>
-                        <button onClick={() => changeQty(item.id, item.size, 1)} className="p-1 rounded-full border" style={{ borderColor: THEME.surfaceLine }}><Plus size={12} color={THEME.ivoryDim} /></button>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => setCart((prev) => prev.filter((i) => !(i.id === item.id && i.size === item.size)))}
-                        aria-label={T.deleteProduct[lang]}
-                        className="p-1"
-                      >
-                        <X size={14} color={THEME.ivoryDim} />
-                      </button>
-                      <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price * item.qty)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {cart.length > 0 && !orderPlaced && (
-              <div className="mt-6">
-                <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</p>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => { setCustomerName(e.target.value); setCustomerInfoError(false); }}
-                  placeholder={T.customerNamePlaceholder[lang]}
-                  className="w-full px-3 py-2 rounded-sm text-sm mb-4"
-                  style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
-                />
-                <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.customerPhone[lang]}</p>
-                <input
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => { setCustomerPhone(e.target.value); setCustomerInfoError(false); }}
-                  placeholder={T.customerPhonePlaceholder[lang]}
-                  className="w-full px-3 py-2 rounded-sm text-sm mb-4"
-                  style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
-                />
-                <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.shippingCountry[lang]}</p>
-                <select
-                  value={orderCountry}
-                  onChange={(e) => { setOrderCountry(e.target.value); setCountryError(false); }}
-                  className="w-full px-3 py-2 rounded-sm text-sm mb-4"
-                  style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
-                >
-                  {(orderCountryOptions.length ? orderCountryOptions : COUNTRIES).map((c) => (
-                    <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c[lang]}</option>
-                  ))}
-                </select>
-                {orderCountryOptions.length === 0 && (
-                  <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>{T.countryMismatch[lang]}</p>
-                )}
-                <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.paymentMethod[lang]}</p>
-                <div className="flex flex-col gap-2 mb-4">
-                  {PAYMENT_METHODS.map((m) => {
-                    const Icon = m.icon;
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4">
+              {cart.length === 0 ? (
+                <p className="text-sm text-center mt-10" style={{ color: THEME.ivoryDim }}>{T.emptyCart[lang]}</p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 pb-2 border-b cursor-pointer" style={{ borderColor: THEME.surfaceLine }}>
+                    <input
+                      type="checkbox"
+                      checked={cart.length > 0 && selectedCartKeys.length === cart.length}
+                      onChange={toggleSelectAllCartItems}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.selectAll[lang]}</span>
+                  </label>
+                  {cart.map((item) => {
+                    const key = cartKey(item);
+                    const isChecked = selectedCartKeys.includes(key);
+                    const hasDiscount = item.originalPrice > item.price;
+                    const discountPct = hasDiscount ? Math.round((1 - item.price / item.originalPrice) * 100) : 0;
+                    const maxQty = Math.max(item.qty, item.stock ?? item.qty);
                     return (
-                      <button
-                        key={m.id}
-                        onClick={() => setPayment(m.id)}
-                        className="flex items-center gap-3 px-3 py-2 rounded-sm border text-xs"
-                        style={{
-                          borderColor: payment === m.id ? THEME.gold : THEME.surfaceLine,
-                          background: payment === m.id ? "rgba(46,93,85,0.10)" : "transparent",
-                          color: THEME.ivory,
-                        }}
-                      >
-                        <Icon size={16} color={payment === m.id ? THEME.gold : THEME.ivoryDim} />
-                        {m[lang]}
-                      </button>
+                      <div key={key} className="flex items-start gap-3 border-b pb-4" style={{ borderColor: THEME.surfaceLine }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleCartItem(key)}
+                          className="w-4 h-4 mt-1 flex-shrink-0"
+                        />
+                        <div className="w-20 flex-shrink-0"><ProductVisual product={item} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
+                          {item.size && <p className="text-[11px]" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price)}</span>
+                            {hasDiscount && (
+                              <>
+                                <span className="text-[11px] line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.originalPrice)}</span>
+                                <span className="text-[11px]" style={{ color: THEME.garnet }}>-{discountPct}%</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="mt-2">
+                            <select
+                              value={item.qty}
+                              onChange={(e) =>
+                                setCart((prev) =>
+                                  prev.map((i) => (i.id === item.id && i.size === item.size ? { ...i, qty: Number(e.target.value) } : i))
+                                )
+                              }
+                              className="px-2 py-1 rounded-sm text-xs"
+                              style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                            >
+                              {Array.from({ length: maxQty }, (_, n) => n + 1).map((n) => (
+                                <option key={n} value={n} style={{ background: THEME.surface }}>{n}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => setCart((prev) => prev.filter((i) => !(i.id === item.id && i.size === item.size)))}
+                            aria-label={T.deleteProduct[lang]}
+                            className="p-1"
+                          >
+                            <X size={14} color={THEME.ivoryDim} />
+                          </button>
+                          <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price * item.qty)}</span>
+                        </div>
+                      </div>
                     );
                   })}
+                </>
+              )}
+
+              {cart.length > 0 && !orderPlaced && (
+                <div className="mt-2">
+                  <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</p>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => { setCustomerName(e.target.value); setCustomerInfoError(false); }}
+                    placeholder={T.customerNamePlaceholder[lang]}
+                    className="w-full px-3 py-2 rounded-sm text-sm mb-4"
+                    style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                  />
+                  <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.customerPhone[lang]}</p>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => { setCustomerPhone(e.target.value); setCustomerInfoError(false); }}
+                    placeholder={T.customerPhonePlaceholder[lang]}
+                    className="w-full px-3 py-2 rounded-sm text-sm mb-4"
+                    style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                  />
+                  <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.shippingCountry[lang]}</p>
+                  <select
+                    value={orderCountry}
+                    onChange={(e) => { setOrderCountry(e.target.value); setCountryError(false); }}
+                    className="w-full px-3 py-2 rounded-sm text-sm mb-4"
+                    style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                  >
+                    {(orderCountryOptions.length ? orderCountryOptions : COUNTRIES).map((c) => (
+                      <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c[lang]}</option>
+                    ))}
+                  </select>
+                  {orderCountryOptions.length === 0 && (
+                    <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>{T.countryMismatch[lang]}</p>
+                  )}
+                  <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.paymentMethod[lang]}</p>
+                  <div className="flex flex-col gap-2 mb-2">
+                    {PAYMENT_METHODS.map((m) => {
+                      const Icon = m.icon;
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => setPayment(m.id)}
+                          className="flex items-center gap-3 px-3 py-2 rounded-sm border text-xs"
+                          style={{
+                            borderColor: payment === m.id ? THEME.gold : THEME.surfaceLine,
+                            background: payment === m.id ? "rgba(46,93,85,0.10)" : "transparent",
+                            color: THEME.ivory,
+                          }}
+                        >
+                          <Icon size={16} color={payment === m.id ? THEME.gold : THEME.ivoryDim} />
+                          {m[lang]}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+              )}
+
+              {orderPlaced && (
+                <div className="mt-8 text-center">
+                  <p className="text-sm" style={{ color: THEME.goldSoft }}>
+                    {T.orderPlaced[lang]} {PAYMENT_METHODS.find((m) => m.id === payment)?.[lang]}.
+                  </p>
+                  <button
+                    onClick={() => { setOrderPlaced(false); setCartOpen(false); setCustomerName(""); setCustomerPhone(""); setStockError(false); setCountryError(false); }}
+                    className="mt-5 px-6 py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+                  >
+                    {T.backToShop[lang]}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {cart.length > 0 && !orderPlaced && (
+              <div className="pt-4 mt-2 border-t flex-shrink-0" style={{ borderColor: THEME.surfaceLine }}>
                 <div className="flex items-center justify-between text-sm mb-3">
                   <span style={{ color: THEME.ivoryDim }}>{T.subtotal[lang]}</span>
-                  <span style={{ color: THEME.goldSoft }}>{fmtPrice(subtotal)}</span>
+                  <span style={{ color: THEME.goldSoft, fontSize: "1.05rem" }}>{fmtPrice(subtotal)}</span>
                 </div>
                 {customerInfoError && (
                   <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.customerInfoRequired[lang]}</p>
@@ -3063,13 +3154,17 @@ export default function JewelryStore() {
                 {countryError && (
                   <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.countryMismatch[lang]}</p>
                 )}
+                {selectedCart.length === 0 && (
+                  <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.selectItemsNote[lang]}</p>
+                )}
                 <button
                   onClick={async () => {
+                    if (selectedCart.length === 0) return;
                     if (!customerName.trim() || !customerPhone.trim()) {
                       setCustomerInfoError(true);
                       return;
                     }
-                    const outOfStock = cart.some((i) => {
+                    const outOfStock = selectedCart.some((i) => {
                       const live = products.find((p) => p.id === i.id);
                       return !live || i.qty > (live.stock ?? 0);
                     });
@@ -3077,7 +3172,7 @@ export default function JewelryStore() {
                       setStockError(true);
                       return;
                     }
-                    const outOfCountry = cart.some((i) => {
+                    const outOfCountry = selectedCart.some((i) => {
                       const live = products.find((p) => p.id === i.id) || i;
                       return !live.countries?.includes(orderCountry);
                     });
@@ -3093,7 +3188,7 @@ export default function JewelryStore() {
                       payment,
                       customerName: customerName.trim(),
                       customerPhone: customerPhone.trim(),
-                      items: cart.map((i) => ({ id: i.id, qty: i.qty, size: i.size, price: i.price, cost: i.cost || 0, rep: i.rep || "" })),
+                      items: selectedCart.map((i) => ({ id: i.id, qty: i.qty, size: i.size, price: i.price, cost: i.cost || 0, rep: i.rep || "" })),
                     };
 
                     const { error } = await supabase.rpc("place_order", {
@@ -3111,11 +3206,12 @@ export default function JewelryStore() {
 
                     setProducts((prev) =>
                       prev.map((p) => {
-                        const orderedQty = cart.filter((i) => i.id === p.id).reduce((s, i) => s + i.qty, 0);
+                        const orderedQty = selectedCart.filter((i) => i.id === p.id).reduce((s, i) => s + i.qty, 0);
                         return orderedQty ? { ...p, stock: Math.max(0, p.stock - orderedQty) } : p;
                       })
                     );
                     setOrders((prev) => [...prev, newOrder]);
+                    setCart((prev) => prev.filter((i) => !selectedCartKeys.includes(cartKey(i))));
                     setStockError(false);
                     setCountryError(false);
                     setOrderPlaced(true);
@@ -3131,25 +3227,13 @@ export default function JewelryStore() {
                       console.error("PDF generation failed:", err);
                     }
                   }}
+                  disabled={selectedCart.length === 0}
                   className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+                  style={selectedCart.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                 >
                   {T.checkout[lang]}
                 </button>
                 <p className="text-[11px] text-center mt-3" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>{T.checkoutNote[lang]}</p>
-              </div>
-            )}
-
-            {orderPlaced && (
-              <div className="mt-8 text-center">
-                <p className="text-sm" style={{ color: THEME.goldSoft }}>
-                  {T.orderPlaced[lang]} {PAYMENT_METHODS.find((m) => m.id === payment)?.[lang]}.
-                </p>
-                <button
-                  onClick={() => { setOrderPlaced(false); setCart([]); setCartOpen(false); setCustomerName(""); setCustomerPhone(""); setStockError(false); setCountryError(false); }}
-                  className="mt-5 px-6 py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
-                >
-                  {T.backToShop[lang]}
-                </button>
               </div>
             )}
           </div>
