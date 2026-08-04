@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { ShoppingBag, X, Plus, Minus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users } from "lucide-react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { ShoppingBag, X, Plus, Minus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -556,6 +556,7 @@ function productRowToApp(row) {
     rep: row.rep || "",
     barcode: row.barcode || "",
     hidden: !!row.hidden,
+    views: row.views ?? 0,
   };
 }
 
@@ -658,6 +659,7 @@ const T = {
     en: "This is a demo — real payment activates once connected to a payment gateway.",
     fr: "Ceci est une démo — le paiement réel s'active après connexion à une passerelle.",
   },
+  mostViewed: { ar: "الأكثر مشاهدة", en: "Most Viewed", fr: "Les Plus Vus" },
   chooseCountry: { ar: "تسوّق حسب البلد", en: "Shop by Country", fr: "Acheter par Pays" },
   allCountries: { ar: "كل البلدان", en: "All Countries", fr: "Tous les Pays" },
   noStock: {
@@ -2245,6 +2247,7 @@ export default function JewelryStore() {
   const [selectedSize, setSelectedSize] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [announceIndex, setAnnounceIndex] = useState(0);
+  const mostViewedScrollRef = useRef(null);
 
   useEffect(() => {
     const count = T.announceMessages[lang].length;
@@ -2359,6 +2362,34 @@ export default function JewelryStore() {
         .filter((p) => (country === "all" || p.countries.includes(country))),
     [category, country, products]
   );
+
+  const mostViewed = useMemo(
+    () =>
+      products
+        .filter((p) => !p.hidden && p.views > 0)
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10),
+    [products]
+  );
+
+  // تسجيل مشاهدة صنف مرّة واحدة فقط لكل جلسة تصفح، لتفادي تضخيم العداد بفتح نفس الصنف عدة مرات
+  const trackView = (productId) => {
+    try {
+      const key = `mv_${productId}`;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // متابعة بصمت إذا كان sessionStorage غير متاح (وضع تصفح خاص مثلاً)
+    }
+    supabase.rpc("increment_product_view", { p_id: productId }).catch(() => {});
+  };
+
+  const openProduct = (product) => {
+    setSelected(product);
+    setModalImgIndex(0);
+    setSelectedSize(null);
+    trackView(product.id);
+  };
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const subtotal = cart.reduce((s, i) => s + i.qty * i.price, 0);
@@ -2556,6 +2587,8 @@ export default function JewelryStore() {
         .dr-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(28,28,28,0.10); border-color: rgba(46,93,85,0.35); }
         .dr-modal { box-shadow: 0 20px 60px rgba(28,28,28,0.22); transform: none !important; }
         .dr-product-img { overflow: hidden; border-radius: 2px; }
+        .dr-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .dr-scroll-hide::-webkit-scrollbar { display: none; }
         .dr-product-img > div { transition: transform .6s ease; }
         .dr-product:hover .dr-product-img > div { transform: scale(1.05); }
         @keyframes dr-rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
@@ -2687,6 +2720,58 @@ export default function JewelryStore() {
         </a>
       </section>
 
+      {/* Most viewed carousel */}
+      {mostViewed.length > 0 && (
+        <section className="px-5 sm:px-10 pt-14 pb-2">
+          <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+            {T.mostViewed[lang]}
+          </p>
+          <div className="relative">
+            <div
+              ref={mostViewedScrollRef}
+              className="flex gap-4 sm:gap-6 overflow-x-auto dr-scroll-hide pb-1"
+              style={{ scrollSnapType: "x mandatory" }}
+            >
+              {mostViewed.map((p) => (
+                <div
+                  key={p.id}
+                  className="dr-product group flex-shrink-0 cursor-pointer"
+                  style={{ width: 148, scrollSnapAlign: "start" }}
+                  onClick={() => openProduct(p)}
+                >
+                  <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} /></div>
+                  <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
+                  <p className="text-xs mt-1 text-center" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</p>
+                  <p className="text-[10px] mt-1 flex items-center justify-center gap-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
+                    <Eye size={11} /> {p.views}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {mostViewed.length > 3 && (
+              <>
+                <button
+                  aria-label="scroll left"
+                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+                  style={{ [isRTL ? "right" : "left"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+                >
+                  <ChevronLeft size={16} color={THEME.ivory} />
+                </button>
+                <button
+                  aria-label="scroll right"
+                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+                  style={{ [isRTL ? "left" : "right"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+                >
+                  <ChevronRight size={16} color={THEME.ivory} />
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Country selector */}
       <section className="px-5 sm:px-10 pt-12 pb-2">
         <p className="text-center text-[11px] uppercase mb-4" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
@@ -2749,7 +2834,7 @@ export default function JewelryStore() {
       )}
       <section className="px-5 sm:px-10 py-10 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-14">
         {filtered.map((p) => (
-          <div key={p.id} className="dr-product group flex flex-col cursor-pointer" onClick={() => { setSelected(p); setModalImgIndex(0); setSelectedSize(null); }}>
+          <div key={p.id} className="dr-product group flex flex-col cursor-pointer" onClick={() => openProduct(p)}>
             <div className="dr-product-img"><ProductVisual product={p} /></div>
             <div className="mt-4 flex-1 text-center">
               <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
@@ -2763,9 +2848,7 @@ export default function JewelryStore() {
               onClick={(e) => {
                 e.stopPropagation();
                 if (p.sizes && p.sizes.length > 1) {
-                  setSelected(p);
-                  setModalImgIndex(0);
-                  setSelectedSize(null);
+                  openProduct(p);
                 } else {
                   addToCart(p, p.sizes && p.sizes[0]);
                 }
