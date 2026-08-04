@@ -8,6 +8,7 @@ drop table if exists reps cascade;
 drop table if exists exchange_rates cascade;
 drop table if exists metal_prices cascade;
 drop table if exists categories cascade;
+drop table if exists admin_users cascade;
 
 create table products (
   id text primary key,
@@ -76,6 +77,15 @@ create table metal_prices (
   constraint single_row check (id = 1)
 );
 
+-- حسابات المشرفين المحدودين (غير المشرف الأعلى) وصلاحياتهم — قائمة معرّفات أقسام لوحة الإدارة
+-- المسموح فيها لهذا المشرف (مثلًا: '{reps,categories}'). الـ id هو نفسه uuid حساب Supabase Auth.
+create table admin_users (
+  id uuid primary key,
+  email text unique not null,
+  permissions text[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
 -- تفعيل الحماية على مستوى الصفوف
 alter table products enable row level security;
 alter table orders enable row level security;
@@ -84,41 +94,77 @@ alter table reps enable row level security;
 alter table exchange_rates enable row level security;
 alter table metal_prices enable row level security;
 alter table categories enable row level security;
+alter table admin_users enable row level security;
 
--- المنتجات: قراءة للجميع، تعديل للإدارة المسجّلة دخول فقط
+-- المشرف الأعلى (صاحب المتجر) — الوحيد يلي يملك كل الصلاحيات دايمًا بغض النظر عن جدول admin_users
+create or replace function is_admin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(auth.jwt() ->> 'email', '') = 'rachad.fakouri@gmail.com';
+$$;
+
+-- تتحقق إذا كان المستخدم الحالي يملك صلاحية معينة: إما إنه المشرف الأعلى، أو مشرف محدود
+-- عنده هالصلاحية بالذات ضمن admin_users.permissions
+create or replace function has_permission(perm text)
+returns boolean
+language sql
+stable
+as $$
+  select is_admin() or exists (
+    select 1 from admin_users
+    where email = coalesce(auth.jwt() ->> 'email', '')
+      and perm = any(permissions)
+  );
+$$;
+
+-- المنتجات: قراءة للجميع، الإضافة تحتاج صلاحية 'add'، والتعديل/الحذف يحتاجون صلاحية 'manage'
 create policy "products_public_read" on products for select using (true);
-create policy "products_admin_write" on products for all
-  to authenticated using (true) with check (true);
+create policy "products_admin_insert" on products for insert
+  to authenticated with check (has_permission('add'));
+create policy "products_admin_update" on products for update
+  to authenticated using (has_permission('manage')) with check (has_permission('manage'));
+create policy "products_admin_delete" on products for delete
+  to authenticated using (has_permission('manage'));
 
--- الطلبات: أي زائر يقدر ينشئ طلب، بس بس الإدارة تقدر تشوفهم
+-- الطلبات: أي زائر يقدر ينشئ طلب، وقراءتها تحتاج صلاحية 'sales' أو 'reports'
 create policy "orders_public_insert" on orders for insert
   to anon, authenticated with check (true);
 create policy "orders_admin_read" on orders for select
-  to authenticated using (true);
+  to authenticated using (has_permission('sales') or has_permission('reports'));
 
 create policy "order_items_public_insert" on order_items for insert
   to anon, authenticated with check (true);
 create policy "order_items_admin_read" on order_items for select
-  to authenticated using (true);
+  to authenticated using (has_permission('sales') or has_permission('reports'));
 
--- المندوبين: قراءة للجميع (تظهر بنموذج الإضافة)، تعديل للإدارة فقط
+-- المندوبين: قراءة للجميع (تظهر بنموذج الإضافة)، تعديل يحتاج صلاحية 'reps'
 create policy "reps_public_read" on reps for select using (true);
 create policy "reps_admin_write" on reps for all
-  to authenticated using (true) with check (true);
+  to authenticated using (has_permission('reps')) with check (has_permission('reps'));
 
--- أسعار الصرف والمعادن: تظهر للزوار بالواجهة، تعديل للإدارة فقط
+-- أسعار الصرف: تظهر للزوار بالواجهة، تعديلها يحتاج صلاحية 'rates'
 create policy "rates_public_read" on exchange_rates for select using (true);
 create policy "rates_admin_write" on exchange_rates for all
-  to authenticated using (true) with check (true);
+  to authenticated using (has_permission('rates')) with check (has_permission('rates'));
 
+-- أسعار المعادن: تظهر للزوار بالواجهة، تعديلها يحتاج صلاحية 'metals'
 create policy "metals_public_read" on metal_prices for select using (true);
 create policy "metals_admin_write" on metal_prices for all
-  to authenticated using (true) with check (true);
+  to authenticated using (has_permission('metals')) with check (has_permission('metals'));
 
--- التصنيفات: قراءة للجميع (تظهر بفلتر المتجر ونموذج المنتج)، تعديل للإدارة فقط
+-- التصنيفات: قراءة للجميع (تظهر بفلتر المتجر ونموذج المنتج)، تعديلها يحتاج صلاحية 'categories'
 create policy "categories_public_read" on categories for select using (true);
 create policy "categories_admin_write" on categories for all
-  to authenticated using (true) with check (true);
+  to authenticated using (has_permission('categories')) with check (has_permission('categories'));
+
+-- المشرفون: كل مشرف يشوف صف صلاحياته الخاص فقط (ليعرف أي أقسام تظهر إله)،
+-- والمشرف الأعلى وحده يقدر يشوف/يضيف/يعدّل/يحذف القائمة كاملة
+create policy "admin_users_self_or_super_read" on admin_users for select
+  to authenticated using (is_admin() or email = coalesce(auth.jwt() ->> 'email', ''));
+create policy "admin_users_super_write" on admin_users for all
+  to authenticated using (is_admin()) with check (is_admin());
 
 -- بيانات ابتدائية لأسعار الصرف والمعادن
 insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);

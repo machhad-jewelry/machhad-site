@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -10,6 +10,22 @@ const IS_ADMIN_DOMAIN =
   typeof window !== "undefined" &&
   (ADMIN_HOSTNAMES.includes(window.location.hostname) ||
     new URLSearchParams(window.location.search).get("admin") === "1");
+
+// المشرف الأعلى (صاحب المتجر) — الوحيد يلي يقدر يضيف/يحذف مشرفين آخرين ويملك كل الصلاحيات دايمًا
+const SUPER_ADMIN_EMAIL = "rachad.fakouri@gmail.com";
+// معرّفات الأقسام القابلة لمنح صلاحية عليها لمشرف محدود (تطابق أقسام لوحة الإدارة)
+const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "reps", "categories"];
+const ADMIN_PERMISSION_LABEL_KEYS = {
+  add: "tabAddProduct",
+  manage: "tabManageProducts",
+  sales: "tabSales",
+  reports: "tabReports",
+  rates: "tabRates",
+  inventory: "tabInventory",
+  metals: "tabMetalPrices",
+  reps: "tabReps",
+  categories: "tabCategories",
+};
 
 const LOGO_SRC =
   "data:image/png;base64," +
@@ -791,6 +807,18 @@ const T = {
   categoryDeleted: { ar: "تم حذف التصنيف", en: "Category deleted", fr: "Catégorie supprimée" },
   categoryUpdated: { ar: "تم تعديل التصنيف", en: "Category updated", fr: "Catégorie mise à jour" },
   confirmDeleteCategory: { ar: "حذف هذا التصنيف؟", en: "Delete this category?", fr: "Supprimer cette catégorie ?" },
+  tabAdmins: { ar: "المشرفون", en: "Admins", fr: "Administrateurs" },
+  addAdmin: { ar: "إضافة مشرف", en: "Add Admin", fr: "Ajouter un Administrateur" },
+  adminEmailPlaceholder: { ar: "البريد الإلكتروني للمشرف", en: "Admin email", fr: "E-mail de l'administrateur" },
+  adminPasswordPlaceholder: { ar: "كلمة السر (٦ أحرف على الأقل)", en: "Password (6+ characters)", fr: "Mot de passe (6+ caractères)" },
+  permissionsLabel: { ar: "الصلاحيات", en: "Permissions", fr: "Permissions" },
+  noPermissions: { ar: "بدون صلاحيات", en: "No permissions", fr: "Aucune permission" },
+  adminAdded: { ar: "تمت إضافة المشرف", en: "Admin added", fr: "Administrateur ajouté" },
+  adminUpdated: { ar: "تم تعديل الصلاحيات", en: "Permissions updated", fr: "Permissions mises à jour" },
+  adminDeleted: { ar: "تم حذف المشرف", en: "Admin deleted", fr: "Administrateur supprimé" },
+  adminError: { ar: "حدث خطأ، تأكد من الإيميل وحاول مرة أخرى", en: "Something went wrong, check the email and try again", fr: "Une erreur est survenue, vérifiez l'e-mail et réessayez" },
+  adminFormInvalid: { ar: "أدخل إيميل صالح وكلمة سر لا تقل عن ٦ أحرف", en: "Enter a valid email and a password of 6+ characters", fr: "Entrez un e-mail valide et un mot de passe de 6+ caractères" },
+  confirmDeleteAdmin: { ar: "حذف هذا المشرف؟", en: "Delete this admin?", fr: "Supprimer cet administrateur ?" },
   barcodeLabel: { ar: "الباركود", en: "Barcode", fr: "Code-barres" },
   tabSales: { ar: "المبيعات", en: "Sales", fr: "Ventes" },
   colDate: { ar: "التاريخ", en: "Date", fr: "Date" },
@@ -1420,6 +1448,178 @@ function AdminCategories({ lang, categories, setCategories }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AdminUsers({ lang }) {
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ email: "", password: "", permissions: [] });
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editPermissions, setEditPermissions] = useState([]);
+  const [confirmId, setConfirmId] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    supabase
+      .from("admin_users")
+      .select("*")
+      .order("created_at")
+      .then(({ data }) => {
+        setAdmins(data || []);
+        setLoading(false);
+      });
+  }, []);
+
+  const togglePerm = (list, id) => (list.includes(id) ? list.filter((p) => p !== id) : [...list, id]);
+  const permLabel = (id) => (ADMIN_PERMISSION_LABEL_KEYS[id] ? T[ADMIN_PERMISSION_LABEL_KEYS[id]][lang] : id);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const addAdmin = async () => {
+    const email = form.email.trim();
+    if (!email || form.password.length < 6) {
+      setMsg(T.adminFormInvalid[lang]);
+      return;
+    }
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("manage-admin", {
+      body: { action: "create", email, password: form.password, permissions: form.permissions },
+    });
+    setBusy(false);
+    if (error || data?.error) {
+      setMsg(T.adminError[lang]);
+      return;
+    }
+    setAdmins((prev) => [...prev, { id: data.id, email, permissions: form.permissions, created_at: new Date().toISOString() }]);
+    setForm({ email: "", password: "", permissions: [] });
+    setMsg(T.adminAdded[lang]);
+  };
+
+  const startEdit = (a) => {
+    setEditingId(a.id);
+    setEditPermissions(a.permissions || []);
+  };
+
+  const savePermissions = async (id) => {
+    const { error } = await supabase.from("admin_users").update({ permissions: editPermissions }).eq("id", id);
+    if (error) return;
+    setAdmins((prev) => prev.map((a) => (a.id === id ? { ...a, permissions: editPermissions } : a)));
+    setEditingId(null);
+    setMsg(T.adminUpdated[lang]);
+  };
+
+  const deleteAdmin = async (id) => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("manage-admin", { body: { action: "delete", id } });
+    setBusy(false);
+    if (error || data?.error) return;
+    setAdmins((prev) => prev.filter((a) => a.id !== id));
+    setConfirmId(null);
+    setMsg(T.adminDeleted[lang]);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="mb-6 p-4 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder={T.adminEmailPlaceholder[lang]}
+            className="px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            placeholder={T.adminPasswordPlaceholder[lang]}
+            className="px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+        </div>
+        <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.permissionsLabel[lang]}</p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {ADMIN_PERMISSION_IDS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, permissions: togglePerm(f.permissions, p) }))}
+              className="px-3 py-1.5 rounded-sm text-xs border"
+              style={{
+                borderColor: form.permissions.includes(p) ? THEME.gold : THEME.surfaceLine,
+                color: form.permissions.includes(p) ? THEME.goldSoft : THEME.ivoryDim,
+              }}
+            >
+              {permLabel(p)}
+            </button>
+          ))}
+        </div>
+        <button onClick={addAdmin} disabled={busy} className="w-full py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold" style={busy ? { opacity: 0.6 } : undefined}>
+          {T.addAdmin[lang]}
+        </button>
+      </div>
+
+      {msg && <p className="text-sm mb-4 text-center" style={{ color: THEME.goldSoft }}>{msg}</p>}
+
+      {!loading && (
+        <div className="flex flex-col gap-2">
+          {admins.map((a) => (
+            <div key={a.id} className="p-3 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-sm" style={{ color: THEME.ivory }}>{a.email}</span>
+                <div className="flex gap-2">
+                  {editingId === a.id ? (
+                    <>
+                      <button onClick={() => savePermissions(a.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">{T.saveChanges[lang]}</button>
+                      <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>{T.confirmCancel[lang]}</button>
+                    </>
+                  ) : confirmId === a.id ? (
+                    <>
+                      <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.confirmDeleteAdmin[lang]}</span>
+                      <button onClick={() => deleteAdmin(a.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">{T.confirmYes[lang]}</button>
+                      <button onClick={() => setConfirmId(null)} className="text-xs px-3 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>{T.confirmCancel[lang]}</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(a)} className="text-xs px-3 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>{T.editProduct[lang]}</button>
+                      <button onClick={() => setConfirmId(a.id)} className="text-xs px-3 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>{T.deleteProduct[lang]}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {editingId === a.id
+                  ? ADMIN_PERMISSION_IDS.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setEditPermissions((prev) => togglePerm(prev, p))}
+                        className="px-3 py-1 rounded-sm text-[11px] border"
+                        style={{
+                          borderColor: editPermissions.includes(p) ? THEME.gold : THEME.surfaceLine,
+                          color: editPermissions.includes(p) ? THEME.goldSoft : THEME.ivoryDim,
+                        }}
+                      >
+                        {permLabel(p)}
+                      </button>
+                    ))
+                  : (a.permissions || []).length > 0
+                  ? a.permissions.map((p) => (
+                      <span key={p} className="px-2 py-0.5 rounded-sm text-[10px]" style={{ background: THEME.bgSoft, color: THEME.ivoryDim }}>
+                        {permLabel(p)}
+                      </span>
+                    ))
+                  : <span className="text-[11px]" style={{ color: THEME.ivoryDim, opacity: 0.6 }}>{T.noPermissions[lang]}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2448,6 +2648,11 @@ export default function JewelryStore() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [myPermissions, setMyPermissions] = useState([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+
+  const currentAdminEmail = session?.user?.email || "";
+  const isSuperAdmin = currentAdminEmail === SUPER_ADMIN_EMAIL;
 
   // تحميل الجلسة الحالية (إن وجدت) ومتابعة تغيّرات تسجيل الدخول
   useEffect(() => {
@@ -2460,6 +2665,38 @@ export default function JewelryStore() {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // تحميل صلاحيات المشرف الحالي (المشرف الأعلى يملك كل الصلاحيات دايمًا)
+  useEffect(() => {
+    if (!currentAdminEmail) {
+      setMyPermissions([]);
+      setPermissionsLoaded(false);
+      return;
+    }
+    if (isSuperAdmin) {
+      setMyPermissions(ADMIN_PERMISSION_IDS);
+      setPermissionsLoaded(true);
+      return;
+    }
+    setPermissionsLoaded(false);
+    supabase
+      .from("admin_users")
+      .select("permissions")
+      .eq("email", currentAdminEmail)
+      .maybeSingle()
+      .then(({ data }) => {
+        setMyPermissions(data?.permissions || []);
+        setPermissionsLoaded(true);
+      });
+  }, [currentAdminEmail, isSuperAdmin]);
+
+  // ينقل التبويب الحالي لأول قسم مسموح فيه إذا كان المشرف مش صاحب صلاحية على التبويب الحالي
+  useEffect(() => {
+    if (!permissionsLoaded) return;
+    if (!myPermissions.includes(adminTab)) {
+      setAdminTab(myPermissions[0] || "add");
+    }
+  }, [permissionsLoaded, myPermissions]);
 
   // تحميل البيانات الأساسية من Supabase عند فتح الموقع
   useEffect(() => {
@@ -2678,7 +2915,10 @@ export default function JewelryStore() {
               { id: "metals", label: T.tabMetalPrices[lang], Icon: Landmark },
               { id: "reps", label: T.tabReps[lang], Icon: Users },
               { id: "categories", label: T.tabCategories[lang], Icon: Tag },
-            ].map(({ id, label, Icon }) => (
+            ]
+              .filter((t) => myPermissions.includes(t.id))
+              .concat(isSuperAdmin ? [{ id: "admins", label: T.tabAdmins[lang], Icon: Shield }] : [])
+              .map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setAdminTab(id)}
@@ -2754,6 +2994,7 @@ export default function JewelryStore() {
           {adminTab === "categories" && (
             <AdminCategories lang={lang} categories={categories} setCategories={setCategories} />
           )}
+          {adminTab === "admins" && isSuperAdmin && <AdminUsers lang={lang} />}
         </div>
       </div>
     );

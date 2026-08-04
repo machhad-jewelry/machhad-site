@@ -2,3 +2,6 @@ project_id = "ymmghsdypavcxfesagdp"
 
 [functions.send-invoice]
 verify_jwt = true
+
+[functions.manage-admin]
+verify_jwt = true
