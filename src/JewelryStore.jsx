@@ -2770,7 +2770,12 @@ export default function JewelryStore() {
                 >
                   <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} /></div>
                   <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
-                  <p className="text-xs mt-1 text-center" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</p>
+                  <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
+                    {p.originalPrice > p.price && (
+                      <span className="text-[10px]" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
+                    )}
+                  </div>
                   <p className="text-[10px] mt-1 flex items-center justify-center gap-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
                     <Eye size={11} /> {p.views}
                   </p>
@@ -2868,7 +2873,15 @@ export default function JewelryStore() {
             <div className="mt-4 flex-1 text-center">
               <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <p className="text-[11px] sm:text-xs mt-1.5 truncate" style={{ color: THEME.ivoryDim }}>{p.mat[lang]}</p>
-              <p className="text-sm mt-2.5" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</p>
+              <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
+                <span className="text-sm" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
+                {p.originalPrice > p.price && (
+                  <>
+                    <span className="text-xs line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(p.originalPrice)}</span>
+                    <span className="text-xs" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
+                  </>
+                )}
+              </div>
               <p className="text-[10px] mt-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
                 {T.inStock[lang]}: {p.stock}{p.barcode ? ` · ${p.barcode}` : ""}
               </p>
@@ -2936,7 +2949,15 @@ export default function JewelryStore() {
             <p className="text-center text-xs mt-1" style={{ color: THEME.ivoryDim }}>{T.material[lang]}: {selected.mat[lang]}</p>
             {selected.barcode && <p className="text-center text-[11px] mt-1" style={{ color: THEME.ivoryDim, opacity: 0.7 }}>{T.barcodeLabel[lang]}: {selected.barcode}</p>}
             <p className="text-sm mt-4 text-center" style={{ color: THEME.ivory }}>{selected.desc[lang]}</p>
-            <p className="text-center mt-4" style={{ color: THEME.goldSoft }}>{fmtPrice(selected.price)}</p>
+            <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+              <span style={{ color: THEME.goldSoft }}>{fmtPrice(selected.price)}</span>
+              {selected.originalPrice > selected.price && (
+                <>
+                  <span className="text-sm line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(selected.originalPrice)}</span>
+                  <span className="text-sm" style={{ color: THEME.garnet }}>-{Math.round((1 - selected.price / selected.originalPrice) * 100)}%</span>
+                </>
+              )}
+            </div>
 
             {selected.sizes && selected.sizes.length > 0 && (
               <div className="mt-4">
@@ -2983,7 +3004,7 @@ export default function JewelryStore() {
       {cartOpen && (
         <div className="fixed inset-0 z-50" onClick={() => setCartOpen(false)} style={{ background: "rgba(28,28,28,0.5)" }}>
           <div
-            className="absolute top-0 h-full w-full sm:w-96 p-6 flex flex-col"
+            className="absolute top-0 h-full w-full sm:w-[440px] p-6 flex flex-col"
             style={{ [isRTL ? "left" : "right"]: 0, background: THEME.surface, borderInlineStart: `1px solid ${THEME.surfaceLine}`, boxShadow: "0 0 40px rgba(28,28,28,0.12)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -3013,19 +3034,19 @@ export default function JewelryStore() {
                     const discountPct = hasDiscount ? Math.round((1 - item.price / item.originalPrice) * 100) : 0;
                     const maxQty = Math.max(item.qty, item.stock ?? item.qty);
                     return (
-                      <div key={key} className="flex items-start gap-3 border-b pb-4" style={{ borderColor: THEME.surfaceLine }}>
+                      <div key={key} className="flex items-start gap-4 border-b pb-5" style={{ borderColor: THEME.surfaceLine }}>
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleCartItem(key)}
                           className="w-4 h-4 mt-1 flex-shrink-0"
                         />
-                        <div className="w-20 flex-shrink-0"><ProductVisual product={item} /></div>
+                        <div className="w-24 flex-shrink-0"><ProductVisual product={item} /></div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm truncate" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
-                          {item.size && <p className="text-[11px]" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price)}</span>
+                          {item.size && <p className="text-[11px] mt-0.5" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
+                          <div className="flex items-center gap-3 mt-2 mb-1 flex-wrap">
+                            <span className="text-sm" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price)}</span>
                             {hasDiscount && (
                               <>
                                 <span className="text-[11px] line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.originalPrice)}</span>
@@ -3033,7 +3054,7 @@ export default function JewelryStore() {
                               </>
                             )}
                           </div>
-                          <div className="mt-2">
+                          <div className="mt-3">
                             <select
                               value={item.qty}
                               onChange={(e) =>
