@@ -794,7 +794,7 @@ const T = {
   updateFailed: { ar: "تعذر التحديث، تأكد من الاتصال وحاول مرة أخرى", en: "Update failed, check your connection and try again", fr: "Échec de la mise à jour, vérifiez votre connexion et réessayez" },
   livePricesUpdated: { ar: "تم تحديث الأسعار من الإنترنت بنجاح", en: "Prices updated from the internet successfully", fr: "Prix mis à jour depuis Internet avec succès" },
   autoUpdateNote: { ar: "تتحدث هذه الأسعار تلقائيًا كل دقيقة من البورصة العالمية", en: "These prices update automatically every minute from the global market", fr: "Ces prix se mettent à jour automatiquement chaque minute depuis le marché mondial" },
-  priceTickerNote: { ar: "هذه الأسعار لا تشمل المصنعية، وتتحدث كل دقيقة", en: "These prices do not include making charges, and update every minute", fr: "Ces prix n'incluent pas les frais de façon, et se mettent à jour chaque minute" },
+  priceTickerNote: { ar: "هذه الأسعار لا تشمل المصنعية ويتم تحديث الأسعار كل دقيقة", en: "These prices do not include making charges, and prices are updated every minute", fr: "Ces prix n'incluent pas les frais de façon, et les prix sont mis à jour chaque minute" },
   dateFrom: { ar: "من تاريخ", en: "From Date", fr: "Date de Début" },
   dateTo: { ar: "إلى تاريخ", en: "To Date", fr: "Date de Fin" },
   tabReps: { ar: "المندوبين", en: "Sales Reps", fr: "Représentants" },
