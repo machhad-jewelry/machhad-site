@@ -9,6 +9,7 @@ drop table if exists exchange_rates cascade;
 drop table if exists metal_prices cascade;
 drop table if exists categories cascade;
 drop table if exists admin_users cascade;
+drop table if exists metal_gram_prices cascade;
 
 create table products (
   id text primary key,
@@ -27,7 +28,14 @@ create table products (
   rep text,
   barcode text,
   hidden boolean not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- تسعير الأصناف "المباعة بالوزن" — sale_method='piece' (افتراضي) يبقي price كسعر ثابت يدوي كالمعتاد،
+  -- 'weight' يجعل السعر الفعلي محسوبًا بالتطبيق من weight_grams × سعر الجرام المرتبط (metal_gram_prices)
+  sale_method text not null default 'piece',
+  weight_grams numeric,
+  metal_type text,
+  gold_karat integer,
+  silver_type text
 );
 
 create table orders (
@@ -86,6 +94,19 @@ create table admin_users (
   created_at timestamptz not null default now()
 );
 
+-- المصدر المركزي الوحيد لأسعار الذهب/الفضة بالجرام، تستخدمه الأصناف "المباعة بالوزن" —
+-- تعديل أي سعر هون ينعكس تلقائيًا (بالتطبيق) على كل صنف مرتبط، مستقل عن مؤشر الأونصة في metal_prices
+create table metal_gram_prices (
+  id integer primary key default 1,
+  gold_18 numeric not null default 0,
+  gold_21 numeric not null default 0,
+  gold_22 numeric not null default 0,
+  silver_male numeric not null default 0,
+  silver_female numeric not null default 0,
+  updated_at timestamptz not null default now(),
+  constraint single_row_gram check (id = 1)
+);
+
 -- تفعيل الحماية على مستوى الصفوف
 alter table products enable row level security;
 alter table orders enable row level security;
@@ -95,6 +116,7 @@ alter table exchange_rates enable row level security;
 alter table metal_prices enable row level security;
 alter table categories enable row level security;
 alter table admin_users enable row level security;
+alter table metal_gram_prices enable row level security;
 
 -- المشرف الأعلى (صاحب المتجر) — الوحيد يلي يملك كل الصلاحيات دايمًا بغض النظر عن جدول admin_users
 create or replace function is_admin()
@@ -166,6 +188,11 @@ create policy "admin_users_self_or_super_read" on admin_users for select
 create policy "admin_users_super_write" on admin_users for all
   to authenticated using (is_admin()) with check (is_admin());
 
+-- أسعار الذهب/الفضة بالجرام: تظهر للزوار (لعرض تفاصيل السعر بصفحة المنتج)، تعديلها يحتاج صلاحية 'metalRates'
+create policy "metal_gram_prices_public_read" on metal_gram_prices for select using (true);
+create policy "metal_gram_prices_admin_write" on metal_gram_prices for all
+  to authenticated using (has_permission('metalRates')) with check (has_permission('metalRates'));
+
 -- بيانات ابتدائية لأسعار الصرف والمعادن
 insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);
 insert into metal_prices (id, gold_ounce, silver_ounce) values (1, 2650, 30);
@@ -175,3 +202,4 @@ insert into categories (id, name_ar, name_en, name_fr) values
   ('necklaces', 'قلائد', 'Necklaces', 'Colliers'),
   ('bracelets', 'أساور', 'Bracelets', 'Bracelets'),
   ('masabih', 'مسابح', 'Prayer Beads', 'Chapelets');
+insert into metal_gram_prices (id) values (1);

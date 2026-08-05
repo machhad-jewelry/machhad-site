@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -14,7 +14,7 @@ const IS_ADMIN_DOMAIN =
 // المشرف الأعلى (صاحب المتجر) — الوحيد يلي يقدر يضيف/يحذف مشرفين آخرين ويملك كل الصلاحيات دايمًا
 const SUPER_ADMIN_EMAIL = "rachad.fakouri@gmail.com";
 // معرّفات الأقسام القابلة لمنح صلاحية عليها لمشرف محدود (تطابق أقسام لوحة الإدارة)
-const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "reps", "categories"];
+const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories"];
 const ADMIN_PERMISSION_LABEL_KEYS = {
   add: "tabAddProduct",
   manage: "tabManageProducts",
@@ -23,6 +23,7 @@ const ADMIN_PERMISSION_LABEL_KEYS = {
   rates: "tabRates",
   inventory: "tabInventory",
   metals: "tabMetalPrices",
+  metalRates: "tabGoldSilverRates",
   reps: "tabReps",
   categories: "tabCategories",
 };
@@ -533,6 +534,43 @@ const DEFAULT_RATES = { USD: 1, XAF: 605, XOF: 605 };
 
 // أسعار المعادن الأساسية (بالدولار) — قابلة للتعديل من لوحة الإدارة
 const DEFAULT_METAL_PRICES = { goldOunce: 2650, silverOunce: 30 };
+
+// أسعار الذهب والفضة بالجرام — مصدر مركزي واحد لتسعير الأصناف "المباعة بالوزن"، مستقلة عن مؤشر الأونصة أعلاه
+const DEFAULT_METAL_GRAM_PRICES = { gold18: 0, gold21: 0, gold22: 0, silverMale: 0, silverFemale: 0 };
+const GOLD_KARATS = [18, 21, 22];
+const SILVER_TYPES = ["male", "female"];
+
+function metalGramPricesRowToApp(row) {
+  return {
+    gold18: Number(row.gold_18) || 0,
+    gold21: Number(row.gold_21) || 0,
+    gold22: Number(row.gold_22) || 0,
+    silverMale: Number(row.silver_male) || 0,
+    silverFemale: Number(row.silver_female) || 0,
+  };
+}
+
+// يرجّع سعر الجرام المرتبط بمعدن/عيار الصنف من الأسعار المركزية، أو null إذا كان الصنف غير مرتبط بمعدن معروف
+function metalGramRateFor(product, rates) {
+  if (product.metalType === "gold") {
+    if (product.goldKarat === 18) return rates.gold18;
+    if (product.goldKarat === 21) return rates.gold21;
+    if (product.goldKarat === 22) return rates.gold22;
+  }
+  if (product.metalType === "silver") {
+    if (product.silverType === "male") return rates.silverMale;
+    if (product.silverType === "female") return rates.silverFemale;
+  }
+  return null;
+}
+
+// السعر النهائي للصنف "المباع بالوزن" = وزنه بالجرام × سعر الجرام المرتبط به حاليًا
+function computeWeightPrice(product, rates) {
+  const rate = metalGramRateFor(product, rates);
+  if (!rate || !product.weightGrams) return 0;
+  return Math.round(product.weightGrams * rate * 100) / 100;
+}
+
 const DEFAULT_REPS = ["محمود", "رشاد", "جميل"];
 const DEFAULT_CATEGORIES = [
   { id: "rings", name: { ar: "خواتم", en: "Rings", fr: "Bagues" } },
@@ -596,6 +634,11 @@ function productRowToApp(row) {
     barcode: row.barcode || "",
     hidden: !!row.hidden,
     views: row.views ?? 0,
+    saleMethod: row.sale_method || "piece",
+    weightGrams: row.weight_grams != null ? Number(row.weight_grams) : null,
+    metalType: row.metal_type || null,
+    goldKarat: row.gold_karat != null ? Number(row.gold_karat) : null,
+    silverType: row.silver_type || null,
   };
 }
 
@@ -617,6 +660,11 @@ function productAppToRow(p) {
     rep: p.rep || null,
     barcode: p.barcode || null,
     hidden: !!p.hidden,
+    sale_method: p.saleMethod || "piece",
+    weight_grams: p.saleMethod === "weight" ? p.weightGrams || null : null,
+    metal_type: p.saleMethod === "weight" ? p.metalType || null : null,
+    gold_karat: p.saleMethod === "weight" && p.metalType === "gold" ? p.goldKarat || null : null,
+    silver_type: p.saleMethod === "weight" && p.metalType === "silver" ? p.silverType || null : null,
   };
 }
 
@@ -794,6 +842,35 @@ const T = {
   updateFailed: { ar: "تعذر التحديث، تأكد من الاتصال وحاول مرة أخرى", en: "Update failed, check your connection and try again", fr: "Échec de la mise à jour, vérifiez votre connexion et réessayez" },
   livePricesUpdated: { ar: "تم تحديث الأسعار من الإنترنت بنجاح", en: "Prices updated from the internet successfully", fr: "Prix mis à jour depuis Internet avec succès" },
   autoUpdateNote: { ar: "تتحدث هذه الأسعار تلقائيًا كل دقيقة من البورصة العالمية", en: "These prices update automatically every minute from the global market", fr: "Ces prix se mettent à jour automatiquement chaque minute depuis le marché mondial" },
+  tabGoldSilverRates: { ar: "أسعار الذهب والفضة", en: "Gold & Silver Rates", fr: "Tarifs Or et Argent" },
+  gramRatesIntro: {
+    ar: "هذه الأسعار مصدر مركزي واحد لتسعير الأصناف \"المباعة بالوزن\" — أي تعديل هون ينعكس تلقائيًا على كل صنف مرتبط، بدون الحاجة لتعديل كل صنف يدويًا.",
+    en: "These are the single central source for pricing items \"sold by weight\" — any change here automatically reflects on every linked item, no need to edit each item manually.",
+    fr: "Ce sont la source centrale unique pour tarifer les articles \"vendus au poids\" — toute modification ici se répercute automatiquement sur chaque article lié, sans avoir à modifier chaque article manuellement.",
+  },
+  goldRatesSection: { ar: "أسعار الذهب (لكل جرام)", en: "Gold Rates (per gram)", fr: "Tarifs Or (par gramme)" },
+  silverRatesSection: { ar: "أسعار الفضة (لكل جرام)", en: "Silver Rates (per gram)", fr: "Tarifs Argent (par gramme)" },
+  karatLabel: { ar: "عيار", en: "Karat", fr: "Carat" },
+  silverMaleLabel: { ar: "فضة رجالي", en: "Men's Silver", fr: "Argent Homme" },
+  silverFemaleLabel: { ar: "فضة نسائي", en: "Women's Silver", fr: "Argent Femme" },
+  saveGramPrices: { ar: "حفظ الأسعار", en: "Save Rates", fr: "Enregistrer les Tarifs" },
+  gramPricesSaved: { ar: "تم تحديث أسعار الذهب والفضة", en: "Gold & silver rates updated", fr: "Tarifs or et argent mis à jour" },
+  saleMethodLabel: { ar: "طريقة البيع", en: "Sale Method", fr: "Méthode de Vente" },
+  saleByPiece: { ar: "يباع بالحبة", en: "Sold by Piece", fr: "Vendu à la Pièce" },
+  saleByWeight: { ar: "يباع بالوزن", en: "Sold by Weight", fr: "Vendu au Poids" },
+  metalTypeLabel: { ar: "نوع المعدن", en: "Metal Type", fr: "Type de Métal" },
+  metalTypeGold: { ar: "ذهب", en: "Gold", fr: "Or" },
+  metalTypeSilver: { ar: "فضة", en: "Silver", fr: "Argent" },
+  silverTypeLabel: { ar: "نوع الفضة", en: "Silver Type", fr: "Type d'Argent" },
+  silverTypeMale: { ar: "رجالي", en: "Men's", fr: "Homme" },
+  silverTypeFemale: { ar: "نسائي", en: "Women's", fr: "Femme" },
+  weightGramsLabel: { ar: "الوزن (جرام)", en: "Weight (grams)", fr: "Poids (grammes)" },
+  computedPriceLabel: { ar: "السعر المحسوب تلقائيًا", en: "Auto-Computed Price", fr: "Prix Calculé Automatiquement" },
+  weightPriceMissingRate: { ar: "لا يوجد سعر جرام محدد لهذا المعدن/العيار بعد — اذهب لقسم أسعار الذهب والفضة", en: "No gram rate set for this metal/karat yet — go to the Gold & Silver Rates section", fr: "Aucun tarif au gramme défini pour ce métal/carat — allez dans la section Tarifs Or et Argent" },
+  gramLabelShort: { ar: "g", en: "g", fr: "g" },
+  perGramLabel: { ar: "سعر الجرام", en: "Price/gram", fr: "Prix/gramme" },
+  weightRequired: { ar: "يرجى إدخال وزن صحيح بالجرام", en: "Please enter a valid weight in grams", fr: "Veuillez entrer un poids valide en grammes" },
+  metalSelectionRequired: { ar: "يرجى تحديد نوع المعدن والعيار/النوع", en: "Please select the metal type and karat/type", fr: "Veuillez sélectionner le type de métal et le carat/type" },
   priceTickerNote: { ar: "هذه الأسعار لا تشمل المصنعية ويتم تحديث الأسعار كل دقيقة", en: "These prices do not include making charges, and prices are updated every minute", fr: "Ces prix n'incluent pas les frais de façon, et les prix sont mis à jour chaque minute" },
   dateFrom: { ar: "من تاريخ", en: "From Date", fr: "Date de Début" },
   dateTo: { ar: "إلى تاريخ", en: "To Date", fr: "Date de Fin" },
@@ -976,11 +1053,12 @@ function ProductVisual({ product, imageIndex = 0 }) {
   );
 }
 
-function AdminAddProduct({ lang, onSave, reps, products, categories }) {
+function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPrices }) {
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
     color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
+    saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
   });
   const [msg, setMsg] = useState("");
 
@@ -1065,14 +1143,41 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
 
   const removeImage = (idx) => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
 
+  const isWeightSale = form.saleMethod === "weight";
+  const weightPricePreview = isWeightSale
+    ? computeWeightPrice(
+        { metalType: form.metalType, goldKarat: Number(form.goldKarat), silverType: form.silverType, weightGrams: Number(form.weightGrams) },
+        metalGramPrices
+      )
+    : 0;
+
   const submit = () => {
-    if ((!form.nameAr && !form.nameEn) || !form.price) {
+    if (!form.nameAr && !form.nameEn) {
       setMsg(T.fillRequired[lang]);
       return;
     }
-    if (Number(form.price) <= 0) {
-      setMsg(T.invalidPrice[lang]);
-      return;
+    if (isWeightSale) {
+      if (!form.metalType || (form.metalType === "gold" && !form.goldKarat) || (form.metalType === "silver" && !form.silverType)) {
+        setMsg(T.metalSelectionRequired[lang]);
+        return;
+      }
+      if (!form.weightGrams || Number(form.weightGrams) <= 0) {
+        setMsg(T.weightRequired[lang]);
+        return;
+      }
+      if (weightPricePreview <= 0) {
+        setMsg(T.weightPriceMissingRate[lang]);
+        return;
+      }
+    } else {
+      if (!form.price) {
+        setMsg(T.fillRequired[lang]);
+        return;
+      }
+      if (Number(form.price) <= 0) {
+        setMsg(T.invalidPrice[lang]);
+        return;
+      }
     }
     if (form.cost !== "" && Number(form.cost) < 0) {
       setMsg(T.invalidCost[lang]);
@@ -1100,7 +1205,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
       name: { ar: form.nameAr || form.nameEn, en: form.nameEn || form.nameAr, fr: form.nameFr || form.nameEn || form.nameAr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
-      price: Number(form.price) || 0,
+      price: isWeightSale ? weightPricePreview : Number(form.price) || 0,
       originalPrice: Number(form.originalPrice) || 0,
       cost: Number(form.cost) || 0,
       stock: Number(form.stock) || 0,
@@ -1108,6 +1213,11 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
       countries: form.countries,
       rep: form.rep.trim(),
       barcode,
+      saleMethod: form.saleMethod,
+      weightGrams: isWeightSale ? Number(form.weightGrams) : null,
+      metalType: isWeightSale ? form.metalType : null,
+      goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
+      silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
     });
     setMsg(T.productSaved[lang]);
     setTimeout(() => setMsg(""), 2000);
@@ -1115,6 +1225,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
       nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
       descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
       color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
+      saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
     });
   };
 
@@ -1213,6 +1324,28 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
         <textarea placeholder={T.descLabel[lang] + " (FR)"} value={form.descFr} onChange={(e) => setForm({ ...form, descFr: e.target.value })} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} rows={2} />
       </div>
 
+      <div className="mb-3">
+        <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.saleMethodLabel[lang]}</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, saleMethod: "piece" })}
+            className="flex-1 px-3 py-2 rounded-sm text-sm border"
+            style={{ borderColor: form.saleMethod === "piece" ? THEME.gold : THEME.surfaceLine, color: form.saleMethod === "piece" ? THEME.goldSoft : THEME.ivoryDim }}
+          >
+            {T.saleByPiece[lang]}
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, saleMethod: "weight" })}
+            className="flex-1 px-3 py-2 rounded-sm text-sm border"
+            style={{ borderColor: form.saleMethod === "weight" ? THEME.gold : THEME.surfaceLine, color: form.saleMethod === "weight" ? THEME.goldSoft : THEME.ivoryDim }}
+          >
+            {T.saleByWeight[lang]}
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
@@ -1222,10 +1355,12 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
             ))}
           </select>
         </div>
-        <div>
-          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
-          <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
-        </div>
+        {!isWeightSale && (
+          <div>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
+            <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+          </div>
+        )}
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.originalPriceLabel[lang]}</label>
           <input type="number" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
@@ -1239,6 +1374,46 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
           <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
         </div>
       </div>
+
+      {isWeightSale && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.metalTypeLabel[lang]}</label>
+            <select value={form.metalType} onChange={(e) => setForm({ ...form, metalType: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+              <option value="gold" style={{ background: THEME.surface }}>{T.metalTypeGold[lang]}</option>
+              <option value="silver" style={{ background: THEME.surface }}>{T.metalTypeSilver[lang]}</option>
+            </select>
+          </div>
+          {form.metalType === "gold" ? (
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.karatLabel[lang]}</label>
+              <select value={form.goldKarat} onChange={(e) => setForm({ ...form, goldKarat: Number(e.target.value) })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                {GOLD_KARATS.map((k) => (
+                  <option key={k} value={k} style={{ background: THEME.surface }}>{k}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.silverTypeLabel[lang]}</label>
+              <select value={form.silverType} onChange={(e) => setForm({ ...form, silverType: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                <option value="male" style={{ background: THEME.surface }}>{T.silverTypeMale[lang]}</option>
+                <option value="female" style={{ background: THEME.surface }}>{T.silverTypeFemale[lang]}</option>
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.weightGramsLabel[lang]}</label>
+            <input type="number" value={form.weightGrams} onChange={(e) => setForm({ ...form, weightGrams: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.computedPriceLabel[lang]}</label>
+            <div className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+              {weightPricePreview > 0 ? `$${weightPricePreview}` : T.weightPriceMissingRate[lang]}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-3">
         <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.colorLabel[lang]}</label>
@@ -1830,6 +2005,100 @@ function AdminMetalPrices({ lang, metalPrices, setMetalPrices }) {
   );
 }
 
+function AdminGoldSilverRates({ lang, metalGramPrices, setMetalGramPrices }) {
+  const [draft, setDraft] = useState({
+    gold18: String(metalGramPrices.gold18),
+    gold21: String(metalGramPrices.gold21),
+    gold22: String(metalGramPrices.gold22),
+    silverMale: String(metalGramPrices.silverMale),
+    silverFemale: String(metalGramPrices.silverFemale),
+  });
+  const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const save = async () => {
+    const next = {
+      gold18: Number(draft.gold18) || 0,
+      gold21: Number(draft.gold21) || 0,
+      gold22: Number(draft.gold22) || 0,
+      silverMale: Number(draft.silverMale) || 0,
+      silverFemale: Number(draft.silverFemale) || 0,
+    };
+    const { error } = await supabase
+      .from("metal_gram_prices")
+      .update({
+        gold_18: next.gold18,
+        gold_21: next.gold21,
+        gold_22: next.gold22,
+        silver_male: next.silverMale,
+        silver_female: next.silverFemale,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", 1);
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
+    setMetalGramPrices(next);
+    setMsgIsError(false);
+    setMsg(T.gramPricesSaved[lang]);
+  };
+
+  return (
+    <div className="max-w-md mx-auto">
+      <p className="text-xs mb-6" style={{ color: THEME.ivoryDim, opacity: 0.85 }}>{T.gramRatesIntro[lang]}</p>
+
+      <p className="text-xs uppercase tracking-widest mb-3" style={{ color: THEME.goldSoft }}>{T.goldRatesSection[lang]}</p>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {GOLD_KARATS.map((k) => (
+          <div key={k}>
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.karatLabel[lang]} {k}</label>
+            <input
+              type="number"
+              value={draft[`gold${k}`]}
+              onChange={(e) => setDraft((d) => ({ ...d, [`gold${k}`]: e.target.value }))}
+              className="w-full px-3 py-2 rounded-sm text-sm"
+              style={inputStyle}
+            />
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs uppercase tracking-widest mb-3" style={{ color: THEME.goldSoft }}>{T.silverRatesSection[lang]}</p>
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div>
+          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.silverMaleLabel[lang]}</label>
+          <input
+            type="number"
+            value={draft.silverMale}
+            onChange={(e) => setDraft((d) => ({ ...d, silverMale: e.target.value }))}
+            className="w-full px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.silverFemaleLabel[lang]}</label>
+          <input
+            type="number"
+            value={draft.silverFemale}
+            onChange={(e) => setDraft((d) => ({ ...d, silverFemale: e.target.value }))}
+            className="w-full px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      {msg && <p className="text-sm mb-3" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
+      <button onClick={save} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">
+        {T.saveGramPrices[lang]}
+      </button>
+    </div>
+  );
+}
+
 function AdminExchangeRates({ lang, rates, setRates }) {
   const [draft, setDraft] = useState({ XAF: String(rates.XAF), XOF: String(rates.XOF) });
   const [msg, setMsg] = useState("");
@@ -1882,7 +2151,7 @@ function AdminExchangeRates({ lang, rates, setRates }) {
   );
 }
 
-function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories }) {
+function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, metalGramPrices }) {
   const [form, setForm] = useState({
     nameAr: product.name.ar, nameEn: product.name.en, nameFr: product.name.fr,
     matAr: product.mat.ar, matEn: product.mat.en, matFr: product.mat.fr,
@@ -1893,6 +2162,11 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
     sizesText: (product.sizes || []).join(", "),
     images: product.images || [],
     rep: product.rep || "",
+    saleMethod: product.saleMethod || "piece",
+    metalType: product.metalType || "gold",
+    goldKarat: product.goldKarat || 18,
+    silverType: product.silverType || "male",
+    weightGrams: product.weightGrams != null ? String(product.weightGrams) : "",
   });
 
   const toggleCountry = (id) =>
@@ -1917,8 +2191,29 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
   const [repError, setRepError] = useState(false);
   const [formError, setFormError] = useState("");
 
+  const isWeightSale = form.saleMethod === "weight";
+  const weightPricePreview = isWeightSale
+    ? computeWeightPrice(
+        { metalType: form.metalType, goldKarat: Number(form.goldKarat), silverType: form.silverType, weightGrams: Number(form.weightGrams) },
+        metalGramPrices
+      )
+    : 0;
+
   const submit = () => {
-    if (!form.price || Number(form.price) <= 0) {
+    if (isWeightSale) {
+      if (!form.metalType || (form.metalType === "gold" && !form.goldKarat) || (form.metalType === "silver" && !form.silverType)) {
+        setFormError(T.metalSelectionRequired[lang]);
+        return;
+      }
+      if (!form.weightGrams || Number(form.weightGrams) <= 0) {
+        setFormError(T.weightRequired[lang]);
+        return;
+      }
+      if (weightPricePreview <= 0) {
+        setFormError(T.weightPriceMissingRate[lang]);
+        return;
+      }
+    } else if (!form.price || Number(form.price) <= 0) {
       setFormError(T.invalidPrice[lang]);
       return;
     }
@@ -1946,13 +2241,18 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
       name: { ar: form.nameAr, en: form.nameEn, fr: form.nameFr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
-      price: Number(form.price) || 0,
+      price: isWeightSale ? weightPricePreview : Number(form.price) || 0,
       originalPrice: Number(form.originalPrice) || 0,
       cost: Number(form.cost) || 0,
       stock: Number(form.stock) || 0,
       sizes: form.sizesText.split(",").map((s) => s.trim()).filter(Boolean),
       countries: form.countries,
       rep: form.rep.trim(),
+      saleMethod: form.saleMethod,
+      weightGrams: isWeightSale ? Number(form.weightGrams) : null,
+      metalType: isWeightSale ? form.metalType : null,
+      goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
+      silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
     });
   };
 
@@ -2000,6 +2300,28 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
           <textarea placeholder={T.descLabel[lang] + " (FR)"} value={form.descFr} onChange={(e) => setForm({ ...form, descFr: e.target.value })} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} rows={2} />
         </div>
 
+        <div className="mb-3">
+          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.saleMethodLabel[lang]}</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, saleMethod: "piece" })}
+              className="flex-1 px-3 py-2 rounded-sm text-sm border"
+              style={{ borderColor: form.saleMethod === "piece" ? THEME.gold : THEME.surfaceLine, color: form.saleMethod === "piece" ? THEME.goldSoft : THEME.ivoryDim }}
+            >
+              {T.saleByPiece[lang]}
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, saleMethod: "weight" })}
+              className="flex-1 px-3 py-2 rounded-sm text-sm border"
+              style={{ borderColor: form.saleMethod === "weight" ? THEME.gold : THEME.surfaceLine, color: form.saleMethod === "weight" ? THEME.goldSoft : THEME.ivoryDim }}
+            >
+              {T.saleByWeight[lang]}
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
@@ -2009,10 +2331,12 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
               ))}
             </select>
           </div>
-          <div>
-            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
-            <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
-          </div>
+          {!isWeightSale && (
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.priceLabel[lang]}</label>
+              <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+            </div>
+          )}
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.originalPriceLabel[lang]}</label>
             <input type="number" value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
@@ -2026,6 +2350,46 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
             <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
           </div>
         </div>
+
+        {isWeightSale && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.metalTypeLabel[lang]}</label>
+              <select value={form.metalType} onChange={(e) => setForm({ ...form, metalType: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                <option value="gold" style={{ background: THEME.surface }}>{T.metalTypeGold[lang]}</option>
+                <option value="silver" style={{ background: THEME.surface }}>{T.metalTypeSilver[lang]}</option>
+              </select>
+            </div>
+            {form.metalType === "gold" ? (
+              <div>
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.karatLabel[lang]}</label>
+                <select value={form.goldKarat} onChange={(e) => setForm({ ...form, goldKarat: Number(e.target.value) })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                  {GOLD_KARATS.map((k) => (
+                    <option key={k} value={k} style={{ background: THEME.surface }}>{k}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.silverTypeLabel[lang]}</label>
+                <select value={form.silverType} onChange={(e) => setForm({ ...form, silverType: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                  <option value="male" style={{ background: THEME.surface }}>{T.silverTypeMale[lang]}</option>
+                  <option value="female" style={{ background: THEME.surface }}>{T.silverTypeFemale[lang]}</option>
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.weightGramsLabel[lang]}</label>
+              <input type="number" value={form.weightGrams} onChange={(e) => setForm({ ...form, weightGrams: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.computedPriceLabel[lang]}</label>
+              <div className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                {weightPricePreview > 0 ? `$${weightPricePreview}` : T.weightPriceMissingRate[lang]}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mb-3">
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.sizesLabel[lang]}</label>
@@ -2076,7 +2440,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories })
   );
 }
 
-function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps, categories }) {
+function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps, categories, metalGramPrices }) {
   const [confirmId, setConfirmId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [msg, setMsg] = useState("");
@@ -2193,6 +2557,7 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
           product={editingProduct}
           reps={reps}
           categories={categories}
+          metalGramPrices={metalGramPrices}
           onCancel={() => setEditingId(null)}
           onSave={(updated) => {
             onEdit(updated);
@@ -2736,7 +3101,17 @@ export default function JewelryStore() {
   }, [lang]);
   const [payment, setPayment] = useState("card");
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const [products, setProducts] = useState([]);
+  const [rawProducts, setRawProducts] = useState([]);
+  const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
+  // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
+  // أي تعديل على سعر الجرام ينعكس فورًا على كل مكان بالموقع بيستخدم products.price، بدون لمس كل صنف يدويًا
+  const products = useMemo(
+    () =>
+      rawProducts.map((p) =>
+        p.saleMethod === "weight" ? { ...p, price: computeWeightPrice(p, metalGramPrices) } : p
+      ),
+    [rawProducts, metalGramPrices]
+  );
   const [orders, setOrders] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [orderCountry, setOrderCountry] = useState(COUNTRIES[0].id);
@@ -2809,7 +3184,7 @@ export default function JewelryStore() {
   // تحميل البيانات الأساسية من Supabase عند فتح الموقع
   useEffect(() => {
     const loadData = async () => {
-      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes] = await Promise.all([
+      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes] = await Promise.all([
         supabase.from("products").select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
         supabase.from("order_items").select("*"),
@@ -2817,9 +3192,11 @@ export default function JewelryStore() {
         supabase.from("exchange_rates").select("*"),
         supabase.from("metal_prices").select("*").eq("id", 1).maybeSingle(),
         supabase.from("categories").select("*").order("created_at"),
+        supabase.from("metal_gram_prices").select("*").eq("id", 1).maybeSingle(),
       ]);
 
-      if (productsRes.data) setProducts(productsRes.data.map(productRowToApp));
+      if (productsRes.data) setRawProducts(productsRes.data.map(productRowToApp));
+      if (gramPricesRes.data) setMetalGramPrices(metalGramPricesRowToApp(gramPricesRes.data));
       if (ordersRes.data && itemsRes.data) {
         const itemsByOrder = {};
         itemsRes.data.forEach((it) => {
@@ -3021,6 +3398,7 @@ export default function JewelryStore() {
               { id: "rates", label: T.tabRates[lang], Icon: Coins },
               { id: "inventory", label: T.tabInventory[lang], Icon: Boxes },
               { id: "metals", label: T.tabMetalPrices[lang], Icon: Landmark },
+              { id: "metalRates", label: T.tabGoldSilverRates[lang], Icon: Gem },
               { id: "reps", label: T.tabReps[lang], Icon: Users },
               { id: "categories", label: T.tabCategories[lang], Icon: Tag },
             ]
@@ -3048,11 +3426,12 @@ export default function JewelryStore() {
               onSave={async (p) => {
                 const { error } = await supabase.from("products").insert(productAppToRow(p));
                 if (error) return;
-                setProducts((prev) => [...prev, p]);
+                setRawProducts((prev) => [...prev, p]);
               }}
               reps={reps}
               products={products}
               categories={categories}
+              metalGramPrices={metalGramPrices}
             />
           )}
           {adminTab === "manage" && (
@@ -3060,22 +3439,23 @@ export default function JewelryStore() {
               lang={lang}
               products={products}
               fmtPrice={fmtPrice}
+              metalGramPrices={metalGramPrices}
               onDelete={async (id) => {
                 const { error } = await supabase.from("products").delete().eq("id", id);
                 if (error) return;
-                setProducts((prev) => prev.filter((p) => p.id !== id));
+                setRawProducts((prev) => prev.filter((p) => p.id !== id));
               }}
               onToggleHide={async (id) => {
                 const target = products.find((p) => p.id === id);
                 if (!target) return;
                 const { error } = await supabase.from("products").update({ hidden: !target.hidden }).eq("id", id);
                 if (error) return;
-                setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p)));
+                setRawProducts((prev) => prev.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p)));
               }}
               onEdit={async (updated) => {
                 const { error } = await supabase.from("products").update(productAppToRow(updated)).eq("id", updated.id);
                 if (error) return;
-                setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                setRawProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
               }}
               reps={reps}
               categories={categories}
@@ -3095,6 +3475,9 @@ export default function JewelryStore() {
           )}
           {adminTab === "metals" && (
             <AdminMetalPrices lang={lang} metalPrices={metalPrices} setMetalPrices={setMetalPrices} />
+          )}
+          {adminTab === "metalRates" && (
+            <AdminGoldSilverRates lang={lang} metalGramPrices={metalGramPrices} setMetalGramPrices={setMetalGramPrices} />
           )}
           {adminTab === "reps" && (
             <AdminReps lang={lang} reps={reps} setReps={setReps} />
@@ -3408,6 +3791,11 @@ export default function JewelryStore() {
                   </>
                 )}
               </div>
+              {p.saleMethod === "weight" && p.weightGrams > 0 && (
+                <p className="text-[10px] mt-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
+                  {p.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(p, metalGramPrices) || 0)}
+                </p>
+              )}
               <p className="text-[10px] mt-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
                 {T.inStock[lang]}: {p.stock}{p.barcode ? ` · ${p.barcode}` : ""}
               </p>
@@ -3484,6 +3872,11 @@ export default function JewelryStore() {
                 </>
               )}
             </div>
+            {selected.saleMethod === "weight" && selected.weightGrams > 0 && (
+              <p className="text-xs text-center mt-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
+                {T.weightGramsLabel[lang]}: {selected.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(selected, metalGramPrices) || 0)}
+              </p>
+            )}
 
             {selected.sizes && selected.sizes.length > 0 && (
               <div className="mt-4">
@@ -3580,6 +3973,11 @@ export default function JewelryStore() {
                               </>
                             )}
                           </div>
+                          {item.saleMethod === "weight" && item.weightGrams > 0 && (
+                            <p className="text-[11px] mb-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
+                              {item.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(item, metalGramPrices) || 0)}
+                            </p>
+                          )}
                           <div className="mt-3">
                             <select
                               value={item.qty}
@@ -3751,7 +4149,7 @@ export default function JewelryStore() {
                       return;
                     }
 
-                    setProducts((prev) =>
+                    setRawProducts((prev) =>
                       prev.map((p) => {
                         const orderedQty = selectedCart.filter((i) => i.id === p.id).reduce((s, i) => s + i.qty, 0);
                         return orderedQty ? { ...p, stock: Math.max(0, p.stock - orderedQty) } : p;
