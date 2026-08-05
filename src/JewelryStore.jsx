@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -759,11 +759,16 @@ const T = {
   productImages: { ar: "صور المنتج", en: "Product Images", fr: "Images du Produit" },
   addImages: { ar: "إضافة صور", en: "Add Images", fr: "Ajouter des Images" },
   aiGenerate: { ar: "توليد الصنف بالذكاء الاصطناعي", en: "Generate Product with AI", fr: "Générer le Produit avec l'IA" },
-  aiUnavailable: {
-    ar: "هذه الميزة معطّلة مؤقتًا — تحتاج خادمًا خلفيًا لحماية مفتاح الذكاء الاصطناعي قبل تفعيلها.",
-    en: "This feature is temporarily disabled — it needs a backend server to protect the AI API key before it can be enabled.",
-    fr: "Cette fonctionnalité est temporairement désactivée — elle nécessite un serveur backend pour protéger la clé API avant d'être activée.",
+  aiDescPlaceholder: {
+    ar: "صف المنتج بصوتك (زر الميكروفون) أو اكتب وصفًا مختصرًا... مثال: خاتم فضة عيار ٩٢٥ بعقيق يماني أحمر",
+    en: "Describe the product by voice (mic button) or type a short description... e.g. Silver 925 ring with red Yemeni agate",
+    fr: "Décrivez le produit par la voix (bouton micro) ou tapez une brève description... ex: Bague en argent 925 avec agate yéménite rouge",
   },
+  aiMicLabel: { ar: "تسجيل صوتي", en: "Voice input", fr: "Saisie vocale" },
+  aiListening: { ar: "جارٍ الاستماع...", en: "Listening...", fr: "Écoute en cours..." },
+  aiGenerating: { ar: "جارٍ التوليد...", en: "Generating...", fr: "Génération..." },
+  aiError: { ar: "تعذر التوليد، حاول مرة أخرى أو أعد صياغة الوصف", en: "Couldn't generate, try again or rephrase the description", fr: "Échec de la génération, réessayez ou reformulez la description" },
+  micNotSupported: { ar: "التسجيل الصوتي غير مدعوم بهذا المتصفح", en: "Voice input is not supported in this browser", fr: "La saisie vocale n'est pas prise en charge par ce navigateur" },
   sizeLabel: { ar: "المقاس", en: "Size", fr: "Taille" },
   selectSize: { ar: "يرجى اختيار المقاس أولًا", en: "Please select a size first", fr: "Veuillez d'abord choisir une taille" },
   sizeStandard: { ar: "مقاس واحد", en: "One Size", fr: "Taille Unique" },
@@ -978,6 +983,69 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
   });
   const [msg, setMsg] = useState("");
 
+  const [aiDesc, setAiDesc] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const SpeechRecognitionCtor =
+    typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+  const speechSupported = !!SpeechRecognitionCtor;
+
+  const toggleListening = () => {
+    if (!speechSupported) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = lang === "ar" ? "ar-SA" : lang === "fr" ? "fr-FR" : "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(" ");
+      setAiDesc((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  };
+
+  const generateWithAi = async () => {
+    if (!aiDesc.trim()) return;
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-product", {
+        body: { description: aiDesc.trim(), categories: categories.map((c) => ({ id: c.id, name: c.name })) },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message || "failed");
+      setForm((f) => ({
+        ...f,
+        nameAr: data.name_ar || f.nameAr,
+        nameEn: data.name_en || f.nameEn,
+        nameFr: data.name_fr || f.nameFr,
+        matAr: data.mat_ar || f.matAr,
+        matEn: data.mat_en || f.matEn,
+        matFr: data.mat_fr || f.matFr,
+        descAr: data.desc_ar || f.descAr,
+        descEn: data.desc_en || f.descEn,
+        descFr: data.desc_fr || f.descFr,
+        cat: categories.some((c) => c.id === data.category_id) ? data.category_id : f.cat,
+        color: data.color_hex || f.color,
+      }));
+    } catch (err) {
+      setAiError(T.aiError[lang]);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const toggleCountry = (id) =>
     setForm((f) => ({
       ...f,
@@ -1053,10 +1121,49 @@ function AdminAddProduct({ lang, onSave, reps, products, categories }) {
 
   return (
     <div className="max-w-xl mx-auto">
-      {/* توليد الصنف بالذكاء الاصطناعي — معطّل مؤقتًا لأن استدعاءه يتطلب خادمًا خلفيًا يحمي مفتاح الـ API */}
-      <div className="mb-6 p-4 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}`, opacity: 0.6 }}>
+      {/* توليد الصنف بالذكاء الاصطناعي */}
+      <div className="mb-6 p-4 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
         <p className="text-xs uppercase tracking-widest mb-2" style={{ color: THEME.goldSoft }}>{T.aiGenerate[lang]}</p>
-        <p className="text-xs" style={{ color: THEME.ivoryDim }}>{T.aiUnavailable[lang]}</p>
+        <div className="flex gap-2 mb-2">
+          <textarea
+            value={aiDesc}
+            onChange={(e) => setAiDesc(e.target.value)}
+            placeholder={T.aiDescPlaceholder[lang]}
+            rows={2}
+            className="flex-1 px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+          <button
+            type="button"
+            onClick={toggleListening}
+            disabled={!speechSupported}
+            title={speechSupported ? T.aiMicLabel[lang] : T.micNotSupported[lang]}
+            className="px-3 rounded-sm border flex-shrink-0"
+            style={{
+              borderColor: listening ? THEME.gold : THEME.surfaceLine,
+              background: listening ? "rgba(46,93,85,0.15)" : "transparent",
+              opacity: speechSupported ? 1 : 0.4,
+              cursor: speechSupported ? "pointer" : "not-allowed",
+            }}
+          >
+            {speechSupported ? (
+              <Mic size={16} color={listening ? THEME.gold : THEME.ivoryDim} />
+            ) : (
+              <MicOff size={16} color={THEME.ivoryDim} />
+            )}
+          </button>
+        </div>
+        {listening && <p className="text-xs mb-2" style={{ color: THEME.goldSoft }}>{T.aiListening[lang]}</p>}
+        {aiError && <p className="text-xs mb-2" style={{ color: "#E07A7A" }}>{aiError}</p>}
+        <button
+          type="button"
+          onClick={generateWithAi}
+          disabled={aiLoading || !aiDesc.trim()}
+          className="px-4 py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold"
+          style={aiLoading || !aiDesc.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+        >
+          {aiLoading ? T.aiGenerating[lang] : T.aiGenerate[lang]}
+        </button>
       </div>
 
       {/* Product images */}

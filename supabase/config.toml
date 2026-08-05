@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.manage-admin]
 verify_jwt = true
+
+[functions.generate-product]
+verify_jwt = true
