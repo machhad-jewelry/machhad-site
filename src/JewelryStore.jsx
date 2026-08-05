@@ -3149,6 +3149,19 @@ export default function JewelryStore() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // إعادة تحميل بيانات المنتجات الكاملة (تكلفة/أصناف مخفية) بعد تسجيل دخول المشرف —
+  // التحميل الأولي (قبل الدخول) يجيب نسخة عامة مقيّدة الأعمدة فقط عبر عرض "products_public"
+  useEffect(() => {
+    if (!currentAdminEmail) return;
+    supabase
+      .from("products")
+      .select("*")
+      .order("created_at")
+      .then(({ data }) => {
+        if (data) setRawProducts(data.map(productRowToApp));
+      });
+  }, [currentAdminEmail]);
+
   // تحميل صلاحيات المشرف الحالي (المشرف الأعلى يملك كل الصلاحيات دايمًا)
   useEffect(() => {
     if (!currentAdminEmail) {
@@ -3184,8 +3197,12 @@ export default function JewelryStore() {
   // تحميل البيانات الأساسية من Supabase عند فتح الموقع
   useEffect(() => {
     const loadData = async () => {
+      // نتحقق إذا في جلسة مشرف فعّالة أصلًا قبل ما نقرر أي مصدر منتجات نستخدم — لتفادي حالة
+      // سباق (race) بين هالتحميل وتحميل بيانات المشرف الكامل (بالأسفل) لو الاثنين صاروا بنفس اللحظة
+      const { data: sessionData } = await supabase.auth.getSession();
+      const productsTable = sessionData?.session ? "products" : "products_public";
       const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes] = await Promise.all([
-        supabase.from("products").select("*").order("created_at"),
+        supabase.from(productsTable).select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
         supabase.from("order_items").select("*"),
         supabase.from("reps").select("*").order("id"),
@@ -3306,12 +3323,16 @@ export default function JewelryStore() {
   const toggleSelectAllCartItems = () =>
     setSelectedCartKeys((prev) => (prev.length === cart.length ? [] : cart.map(cartKey)));
 
+  // يرجّع أحدث نسخة من الصنف (السعر خصوصًا) من الحالة الحيّة بدل النسخة المجمّدة وقت الإضافة للسلة —
+  // ضروري لأصناف "البيع بالوزن" اللي سعرها بيتغيّر مع سعر الغرام حتى بعد ما تنضاف للسلة
+  const liveProduct = (item) => products.find((p) => p.id === item.id) || item;
+
   const selectedCart = cart.filter((i) => selectedCartKeys.includes(cartKey(i)));
-  const subtotal = selectedCart.reduce((s, i) => s + i.qty * i.price, 0);
+  const subtotal = selectedCart.reduce((s, i) => s + i.qty * liveProduct(i).price, 0);
 
   // بلدان الشحن المتوفرة فعليًا لكل القطع المحدَّدة للشراء حاليًا
   const orderCountryOptions = COUNTRIES.filter((c) =>
-    selectedCart.every((i) => (products.find((p) => p.id === i.id) || i).countries?.includes(c.id))
+    selectedCart.every((i) => liveProduct(i).countries?.includes(c.id))
   );
 
   useEffect(() => {
@@ -3949,8 +3970,9 @@ export default function JewelryStore() {
                   {cart.map((item) => {
                     const key = cartKey(item);
                     const isChecked = selectedCartKeys.includes(key);
-                    const hasDiscount = item.originalPrice > item.price;
-                    const discountPct = hasDiscount ? Math.round((1 - item.price / item.originalPrice) * 100) : 0;
+                    const live = liveProduct(item);
+                    const hasDiscount = live.originalPrice > live.price;
+                    const discountPct = hasDiscount ? Math.round((1 - live.price / live.originalPrice) * 100) : 0;
                     const maxQty = Math.max(item.qty, item.stock ?? item.qty);
                     return (
                       <div key={key} className="flex items-start gap-4 border-b pb-5" style={{ borderColor: THEME.surfaceLine }}>
@@ -3965,17 +3987,17 @@ export default function JewelryStore() {
                           <p className="text-sm truncate" style={{ color: THEME.ivory }}>{item.name[lang]}</p>
                           {item.size && <p className="text-[11px] mt-0.5" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}: {item.size}</p>}
                           <div className="flex items-center gap-3 mt-2 mb-1 flex-wrap">
-                            <span className="text-sm" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price)}</span>
+                            <span className="text-sm" style={{ color: THEME.goldSoft }}>{fmtPrice(live.price)}</span>
                             {hasDiscount && (
                               <>
-                                <span className="text-[11px] line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(item.originalPrice)}</span>
+                                <span className="text-[11px] line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(live.originalPrice)}</span>
                                 <span className="text-[11px]" style={{ color: THEME.garnet }}>-{discountPct}%</span>
                               </>
                             )}
                           </div>
-                          {item.saleMethod === "weight" && item.weightGrams > 0 && (
+                          {live.saleMethod === "weight" && live.weightGrams > 0 && (
                             <p className="text-[11px] mb-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
-                              {item.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(item, metalGramPrices) || 0)}
+                              {live.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(live, metalGramPrices) || 0)}
                             </p>
                           )}
                           <div className="mt-3">
@@ -4003,7 +4025,7 @@ export default function JewelryStore() {
                           >
                             <X size={14} color={THEME.ivoryDim} />
                           </button>
-                          <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(item.price * item.qty)}</span>
+                          <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(live.price * item.qty)}</span>
                         </div>
                       </div>
                     );
@@ -4133,7 +4155,10 @@ export default function JewelryStore() {
                       payment,
                       customerName: customerName.trim(),
                       customerPhone: customerPhone.trim(),
-                      items: selectedCart.map((i) => ({ id: i.id, qty: i.qty, size: i.size, price: i.price, cost: i.cost || 0, rep: i.rep || "" })),
+                      items: selectedCart.map((i) => {
+                        const live = liveProduct(i);
+                        return { id: i.id, qty: i.qty, size: i.size, price: live.price, cost: live.cost || 0, rep: i.rep || "" };
+                      }),
                     };
 
                     const { error } = await supabase.rpc("place_order", {

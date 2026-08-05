@@ -141,8 +141,13 @@ as $$
   );
 $$;
 
--- المنتجات: قراءة للجميع، الإضافة تحتاج صلاحية 'add'، والتعديل/الحذف يحتاجون صلاحية 'manage'
-create policy "products_public_read" on products for select using (true);
+-- المنتجات: القراءة الكاملة (بما فيها التكلفة cost والأصناف المخفية) محصورة بالمشرفين المسجّلين دخولهم فقط.
+-- الزوار/الموقع العام ما إلهم أي صلاحية قراءة مباشرة على الجدول نفسه — بيقروا فقط من العرض العام
+-- "products_public" (بالأسفل) اللي ما فيه عمودي cost/rep وبيفلتر الأصناف المخفية تلقائيًا.
+-- (2026-08-05: قبل هيك كانت products_public_read مفتوحة للجميع بدون قيود — أي حد يستدعي الـ API
+-- مباشرة كان يقدر يشوف تكلفة كل صنف والأصناف المخفية، حتى لو الواجهة ما كانت تعرضها)
+create policy "products_admin_read" on products for select
+  to authenticated using (true);
 create policy "products_admin_insert" on products for insert
   to authenticated with check (has_permission('add'));
 create policy "products_admin_update" on products for update
@@ -150,14 +155,24 @@ create policy "products_admin_update" on products for update
 create policy "products_admin_delete" on products for delete
   to authenticated using (has_permission('manage'));
 
--- الطلبات: أي زائر يقدر ينشئ طلب، وقراءتها تحتاج صلاحية 'sales' أو 'reports'
-create policy "orders_public_insert" on orders for insert
-  to anon, authenticated with check (true);
+-- عرض عام مقيّد الأعمدة والصفوف فوق جدول المنتجات — هذا اللي يقرأ منه الموقع العام (الزوار)،
+-- بيستثني عمودي cost وrep وبيستبعد أي صنف hidden=true تلقائيًا
+create or replace view products_public as
+  select id, cat, color, name_ar, name_en, name_fr, mat_ar, mat_en, mat_fr,
+         desc_ar, desc_en, desc_fr, price, original_price, stock, sizes, images,
+         countries, barcode, views, sale_method, weight_grams, metal_type, gold_karat,
+         silver_type, created_at
+  from products
+  where hidden = false;
+
+grant select on products_public to anon, authenticated;
+
+-- الطلبات: الإدخال يتم حصرًا عبر دالة place_order (security definer بتتحقق من السعر/التكلفة/المخزون
+-- بنفسها، انظر supabase_schema_part2.sql) — ما في صلاحية إدخال مباشر على الجدولين لأي طرف،
+-- حتى المشرف. قراءتها تحتاج صلاحية 'sales' أو 'reports'.
 create policy "orders_admin_read" on orders for select
   to authenticated using (has_permission('sales') or has_permission('reports'));
 
-create policy "order_items_public_insert" on order_items for insert
-  to anon, authenticated with check (true);
 create policy "order_items_admin_read" on order_items for select
   to authenticated using (has_permission('sales') or has_permission('reports'));
 
