@@ -55,9 +55,12 @@ Deno.serve(async (req) => {
         format: { type: "json_schema", schema: OUTPUT_SCHEMA },
       },
       system:
-        "أنت مترجم لأسماء تصنيفات متجر مجوهرات اسمه \"مشهد\" (Machhad). تترجم اسم تصنيف قصير من العربية " +
-        "إلى الإنجليزية والفرنسية بدقة، بصيغة قصيرة ومناسبة لاسم قسم بمتجر إلكتروني (مثلًا: خواتم → " +
-        "Rings / Bagues، أساور → Bracelets / Bracelets).",
+        "You translate a short jewelry-store category name from Arabic into English and French. " +
+        "Reply with a short, accurate name suitable for an online store's category label (e.g. خواتم → " +
+        "Rings / Bagues, أساور → Bracelets / Bracelets). " +
+        "name_en MUST be written in English script only, and name_fr MUST be written in French script only — " +
+        "never copy or leave any part of the Arabic input in either field, even if unsure of the exact translation; " +
+        "give your best English/French equivalent instead.",
       messages: [{ role: "user", content: text.trim() }],
     });
 

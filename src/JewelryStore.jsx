@@ -1630,6 +1630,8 @@ function AdminCategories({ lang, categories, setCategories }) {
     try {
       const { data, error } = await supabase.functions.invoke("translate-text", { body: { text: nameAr } });
       if (error || data?.error) throw new Error(data?.error || error?.message || "failed");
+      const isArabic = (s) => /[؀-ۿ]/.test(s || "");
+      if (isArabic(data.name_en) || isArabic(data.name_fr)) throw new Error("translation returned Arabic text");
       setForm((f) => ({ ...f, nameEn: data.name_en || f.nameEn, nameFr: data.name_fr || f.nameFr }));
     } catch {
       setMsg(T.translateFailed[lang]);
