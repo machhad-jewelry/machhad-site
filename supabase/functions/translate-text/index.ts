@@ -46,36 +46,61 @@ Deno.serve(async (req) => {
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    const isArabic = (s: unknown) => typeof s === "string" && /[؀-ۿ]/.test(s);
+    const system =
+      "You translate a short jewelry-store category name from Arabic into English and French — including " +
+      "colloquial/dialect words, plurals, and jewelry-specific terms that may not have one obvious equivalent " +
+      "(rings, necklaces, bracelets, earrings, anklets, pins/brooches, prayer beads, cufflinks, pendants, charms, " +
+      "chains, etc.). Always produce your best short English/French equivalent, even for an unfamiliar or unusual " +
+      "word — never leave the field untranslated. " +
+      "name_en MUST be written in English script only, and name_fr MUST be written in French script only — " +
+      "never copy or leave any part of the Arabic input in either field.";
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      thinking: { type: "disabled" },
-      output_config: {
-        format: { type: "json_schema", schema: OUTPUT_SCHEMA },
-      },
-      system:
-        "You translate a short jewelry-store category name from Arabic into English and French. " +
-        "Reply with a short, accurate name suitable for an online store's category label (e.g. خواتم → " +
-        "Rings / Bagues, أساور → Bracelets / Bracelets). " +
-        "name_en MUST be written in English script only, and name_fr MUST be written in French script only — " +
-        "never copy or leave any part of the Arabic input in either field, even if unsure of the exact translation; " +
-        "give your best English/French equivalent instead.",
-      messages: [{ role: "user", content: text.trim() }],
-    });
+    // نعطي المحاولة حتى 3 مرات — النموذج أحيانًا (خصوصًا مع كلمات غير مألوفة) بيرجّع النص العربي نفسه
+    // بدل ما يترجمه رغم التعليمات، فبنعيد المحاولة بتوضيح أقوى بدل ما نفشل من أول مرة
+    let lastResult: { name_en?: string; name_fr?: string } | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const userMsg =
+        attempt === 0
+          ? text.trim()
+          : `Translate this Arabic jewelry-category name to English and French: "${text.trim()}". ` +
+            "Do not repeat the Arabic — give your best real English and French words for it.";
 
-    if (response.stop_reason === "refusal") {
-      throw new Error("Translation was declined");
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-5",
+        max_tokens: 256,
+        thinking: { type: "disabled" },
+        output_config: {
+          format: { type: "json_schema", schema: OUTPUT_SCHEMA },
+        },
+        system,
+        messages: [{ role: "user", content: userMsg }],
+      });
+
+      if (response.stop_reason === "refusal") {
+        throw new Error("Translation was declined");
+      }
+
+      const textBlock = response.content.find((b: any) => b.type === "text") as any;
+      if (!textBlock) continue;
+
+      const parsed = JSON.parse(textBlock.text);
+      lastResult = parsed;
+
+      if (!isArabic(parsed.name_en) && !isArabic(parsed.name_fr)) {
+        return new Response(JSON.stringify(parsed), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    const textBlock = response.content.find((b: any) => b.type === "text") as any;
-    if (!textBlock) throw new Error("No structured output returned");
-
-    const parsed = JSON.parse(textBlock.text);
-
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // بعد 3 محاولات، ما زال في عربي بالنتيجة — منرجّع أفضل نتيجة وصلنا لها بدل فشل كامل
+    if (lastResult) {
+      return new Response(JSON.stringify(lastResult), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    throw new Error("No structured output returned");
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
