@@ -1080,13 +1080,15 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     }
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = lang === "ar" ? "ar-SA" : lang === "fr" ? "fr-FR" : "en-US";
+    recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (e) => {
-      const transcript = Array.from(e.results)
-        .map((r) => r[0].transcript)
-        .join(" ");
-      setAiDesc((prev) => (prev ? prev + " " + transcript : transcript));
+      let transcript = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += (transcript ? " " : "") + e.results[i][0].transcript;
+      }
+      if (transcript) setAiDesc((prev) => (prev ? prev + " " + transcript : transcript));
     };
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
