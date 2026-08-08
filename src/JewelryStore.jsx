@@ -890,6 +890,10 @@ const T = {
   categoryDeleted: { ar: "تم حذف التصنيف", en: "Category deleted", fr: "Catégorie supprimée" },
   categoryUpdated: { ar: "تم تعديل التصنيف", en: "Category updated", fr: "Catégorie mise à jour" },
   confirmDeleteCategory: { ar: "حذف هذا التصنيف؟", en: "Delete this category?", fr: "Supprimer cette catégorie ?" },
+  translateBtn: { ar: "ترجم", en: "Translate", fr: "Traduire" },
+  translating: { ar: "جارِ الترجمة...", en: "Translating...", fr: "Traduction en cours..." },
+  translateNeedsArabic: { ar: "اكتب الاسم بالعربي أولًا", en: "Type the Arabic name first", fr: "Saisissez d'abord le nom en arabe" },
+  translateFailed: { ar: "تعذّرت الترجمة، حاول مجددًا", en: "Translation failed, try again", fr: "Échec de la traduction, réessayez" },
   tabAdmins: { ar: "المشرفون", en: "Admins", fr: "Administrateurs" },
   addAdmin: { ar: "إضافة مشرف", en: "Add Admin", fr: "Ajouter un Administrateur" },
   adminEmailPlaceholder: { ar: "البريد الإلكتروني للمشرف", en: "Admin email", fr: "E-mail de l'administrateur" },
@@ -1611,8 +1615,28 @@ function AdminCategories({ lang, categories, setCategories }) {
   const [editForm, setEditForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
   const [confirmId, setConfirmId] = useState(null);
   const [msg, setMsg] = useState("");
+  const [translating, setTranslating] = useState(false);
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const translateName = async () => {
+    const nameAr = form.nameAr.trim();
+    if (!nameAr) {
+      setMsg(T.translateNeedsArabic[lang]);
+      return;
+    }
+    setTranslating(true);
+    setMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("translate-text", { body: { text: nameAr } });
+      if (error || data?.error) throw new Error(data?.error || error?.message || "failed");
+      setForm((f) => ({ ...f, nameEn: data.name_en || f.nameEn, nameFr: data.name_fr || f.nameFr }));
+    } catch {
+      setMsg(T.translateFailed[lang]);
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const addCategory = async () => {
     const nameAr = form.nameAr.trim();
@@ -1662,11 +1686,19 @@ function AdminCategories({ lang, categories, setCategories }) {
 
   return (
     <div className="max-w-xl mx-auto">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
         <input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} placeholder={T.nameAr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
         <input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} placeholder={T.nameEn[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
         <input value={form.nameFr} onChange={(e) => setForm({ ...form, nameFr: e.target.value })} placeholder={T.nameFr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
       </div>
+      <button
+        onClick={translateName}
+        disabled={translating}
+        className="w-full mb-3 px-4 py-2 rounded-sm text-xs uppercase tracking-widest border"
+        style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim, opacity: translating ? 0.6 : 1 }}
+      >
+        {translating ? T.translating[lang] : T.translateBtn[lang]}
+      </button>
       <button onClick={addCategory} className="w-full mb-6 px-4 py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold">
         {T.addCategory[lang]}
       </button>
