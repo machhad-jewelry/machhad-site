@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -14,7 +14,7 @@ const IS_ADMIN_DOMAIN =
 // المشرف الأعلى (صاحب المتجر) — الوحيد يلي يقدر يضيف/يحذف مشرفين آخرين ويملك كل الصلاحيات دايمًا
 const SUPER_ADMIN_EMAIL = "rachad.fakouri@gmail.com";
 // معرّفات الأقسام القابلة لمنح صلاحية عليها لمشرف محدود (تطابق أقسام لوحة الإدارة)
-const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories"];
+const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories", "content"];
 const ADMIN_PERMISSION_LABEL_KEYS = {
   add: "tabAddProduct",
   manage: "tabManageProducts",
@@ -26,6 +26,7 @@ const ADMIN_PERMISSION_LABEL_KEYS = {
   metalRates: "tabGoldSilverRates",
   reps: "tabReps",
   categories: "tabCategories",
+  content: "tabSiteContent",
 };
 
 const LOGO_SRC =
@@ -882,6 +883,12 @@ const T = {
   generatingDesign: { ar: "جارِ توليد التصميم...", en: "Generating design...", fr: "Génération en cours..." },
   customDesignFailed: { ar: "تعذّر توليد التصميم، حاول مجددًا", en: "Couldn't generate the design, try again", fr: "Échec de la génération, réessayez" },
   customDesignAdded: { ar: "تمت إضافة التصميم للسلة", en: "Design added to cart", fr: "Design ajouté au panier" },
+  tabSiteContent: { ar: "الجملة الرئيسية", en: "Homepage Tagline", fr: "Slogan d'Accueil" },
+  heroTitleArLabel: { ar: "الجملة (عربي)", en: "Tagline (Arabic)", fr: "Slogan (Arabe)" },
+  heroTitleEnLabel: { ar: "الجملة (إنجليزي)", en: "Tagline (English)", fr: "Slogan (Anglais)" },
+  heroTitleFrLabel: { ar: "الجملة (فرنسي)", en: "Tagline (French)", fr: "Slogan (Français)" },
+  saveContent: { ar: "حفظ الجملة", en: "Save Tagline", fr: "Enregistrer le Slogan" },
+  contentSaved: { ar: "تم حفظ الجملة", en: "Tagline saved", fr: "Slogan enregistré" },
   dateFrom: { ar: "من تاريخ", en: "From Date", fr: "Date de Début" },
   dateTo: { ar: "إلى تاريخ", en: "To Date", fr: "Date de Fin" },
   tabReps: { ar: "المندوبين", en: "Sales Reps", fr: "Représentants" },
@@ -2145,6 +2152,49 @@ function AdminGoldSilverRates({ lang, metalGramPrices, setMetalGramPrices }) {
   );
 }
 
+// تعديل يدوي لجملة الواجهة الرئيسية (تحت شعار الموقع) — بدون الحاجة لأي تعديل بالكود لاحقًا
+function AdminSiteContent({ lang, heroTitle, setHeroTitle }) {
+  const [draft, setDraft] = useState({ ar: heroTitle.ar, en: heroTitle.en, fr: heroTitle.fr });
+  const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const save = async () => {
+    const next = { ar: draft.ar.trim(), en: draft.en.trim(), fr: draft.fr.trim() };
+    const { error } = await supabase
+      .from("site_settings")
+      .update({ hero_title_ar: next.ar, hero_title_en: next.en, hero_title_fr: next.fr, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
+    setHeroTitle(next);
+    setMsgIsError(false);
+    setMsg(T.contentSaved[lang]);
+  };
+
+  return (
+    <div className="max-w-md mx-auto">
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.heroTitleArLabel[lang]}</label>
+      <input value={draft.ar} onChange={(e) => setDraft((d) => ({ ...d, ar: e.target.value }))} className="w-full px-3 py-2 rounded-sm text-sm mb-3" style={inputStyle} />
+
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.heroTitleEnLabel[lang]}</label>
+      <input value={draft.en} onChange={(e) => setDraft((d) => ({ ...d, en: e.target.value }))} className="w-full px-3 py-2 rounded-sm text-sm mb-3" style={inputStyle} />
+
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.heroTitleFrLabel[lang]}</label>
+      <input value={draft.fr} onChange={(e) => setDraft((d) => ({ ...d, fr: e.target.value }))} className="w-full px-3 py-2 rounded-sm text-sm mb-6" style={inputStyle} />
+
+      {msg && <p className="text-sm mb-3" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
+      <button onClick={save} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">
+        {T.saveContent[lang]}
+      </button>
+    </div>
+  );
+}
+
 function AdminExchangeRates({ lang, rates, setRates }) {
   const [draft, setDraft] = useState({ XAF: String(rates.XAF), XOF: String(rates.XOF) });
   const [msg, setMsg] = useState("");
@@ -3315,6 +3365,7 @@ export default function JewelryStore() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [rawProducts, setRawProducts] = useState([]);
   const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
+  const [heroTitle, setHeroTitle] = useState({ ar: T.heroTitle.ar, en: T.heroTitle.en, fr: T.heroTitle.fr });
   // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
   // أي تعديل على سعر الجرام ينعكس فورًا على كل مكان بالموقع بيستخدم products.price، بدون لمس كل صنف يدويًا
   const products = useMemo(
@@ -3413,7 +3464,7 @@ export default function JewelryStore() {
       // سباق (race) بين هالتحميل وتحميل بيانات المشرف الكامل (بالأسفل) لو الاثنين صاروا بنفس اللحظة
       const { data: sessionData } = await supabase.auth.getSession();
       const productsTable = sessionData?.session ? "products" : "products_public";
-      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes] = await Promise.all([
+      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
         supabase.from(productsTable).select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
         supabase.from("order_items").select("*"),
@@ -3422,10 +3473,18 @@ export default function JewelryStore() {
         supabase.from("metal_prices").select("*").eq("id", 1).maybeSingle(),
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("metal_gram_prices").select("*").eq("id", 1).maybeSingle(),
+        supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       ]);
 
       if (productsRes.data) setRawProducts(productsRes.data.map(productRowToApp));
       if (gramPricesRes.data) setMetalGramPrices(metalGramPricesRowToApp(gramPricesRes.data));
+      if (siteSettingsRes.data) {
+        setHeroTitle({
+          ar: siteSettingsRes.data.hero_title_ar || T.heroTitle.ar,
+          en: siteSettingsRes.data.hero_title_en || T.heroTitle.en,
+          fr: siteSettingsRes.data.hero_title_fr || T.heroTitle.fr,
+        });
+      }
       if (ordersRes.data && itemsRes.data) {
         const itemsByOrder = {};
         itemsRes.data.forEach((it) => {
@@ -3634,6 +3693,7 @@ export default function JewelryStore() {
               { id: "metalRates", label: T.tabGoldSilverRates[lang], Icon: Gem },
               { id: "reps", label: T.tabReps[lang], Icon: Users },
               { id: "categories", label: T.tabCategories[lang], Icon: Tag },
+              { id: "content", label: T.tabSiteContent[lang], Icon: Type },
             ]
               .filter((t) => myPermissions.includes(t.id))
               .concat(isSuperAdmin ? [{ id: "admins", label: T.tabAdmins[lang], Icon: Shield }] : [])
@@ -3717,6 +3777,9 @@ export default function JewelryStore() {
           )}
           {adminTab === "categories" && (
             <AdminCategories lang={lang} categories={categories} setCategories={setCategories} />
+          )}
+          {adminTab === "content" && (
+            <AdminSiteContent lang={lang} heroTitle={heroTitle} setHeroTitle={setHeroTitle} />
           )}
           {adminTab === "admins" && isSuperAdmin && <AdminUsers lang={lang} />}
         </div>
@@ -3870,7 +3933,7 @@ export default function JewelryStore() {
         <div className="dr-hero-glow" style={{ position: "absolute", top: "10%", width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${THEME.gold}14, transparent 70%)` }} />
         <img src={LOGO_SRC} alt={T.brand[lang]} className="mb-8 w-52 sm:w-72 h-auto object-contain" />
         <h1 style={{ fontFamily: displayFont, fontSize: "clamp(2rem, 5vw, 3.4rem)", fontWeight: 400, color: THEME.goldSoft, lineHeight: 1.3, letterSpacing: "0.01em" }}>
-          {T.heroTitle[lang]}
+          {heroTitle[lang]}
         </h1>
         <p className="max-w-xl mt-6 text-sm sm:text-base leading-relaxed" style={{ color: THEME.ivoryDim }}>
           {T.heroSub[lang]}

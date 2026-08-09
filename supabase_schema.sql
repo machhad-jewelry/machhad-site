@@ -107,6 +107,16 @@ create table metal_gram_prices (
   constraint single_row_gram check (id = 1)
 );
 
+-- نصوص عامة قابلة للتعديل من لوحة الإدارة بدون الحاجة لأي تعديل بالكود لاحقًا (حاليًا: جملة الواجهة الرئيسية)
+create table site_settings (
+  id integer primary key default 1,
+  hero_title_ar text,
+  hero_title_en text,
+  hero_title_fr text,
+  updated_at timestamptz not null default now(),
+  constraint single_row_settings check (id = 1)
+);
+
 -- تفعيل الحماية على مستوى الصفوف
 alter table products enable row level security;
 alter table orders enable row level security;
@@ -117,6 +127,7 @@ alter table metal_prices enable row level security;
 alter table categories enable row level security;
 alter table admin_users enable row level security;
 alter table metal_gram_prices enable row level security;
+alter table site_settings enable row level security;
 
 -- المشرف الأعلى (صاحب المتجر) — الوحيد يلي يملك كل الصلاحيات دايمًا بغض النظر عن جدول admin_users
 create or replace function is_admin()
@@ -208,6 +219,11 @@ create policy "metal_gram_prices_public_read" on metal_gram_prices for select us
 create policy "metal_gram_prices_admin_write" on metal_gram_prices for all
   to authenticated using (has_permission('metalRates')) with check (has_permission('metalRates'));
 
+-- نصوص الواجهة العامة: تظهر للزوار (تُعرض بالصفحة الرئيسية)، تعديلها يحتاج صلاحية 'content'
+create policy "site_settings_public_read" on site_settings for select using (true);
+create policy "site_settings_admin_write" on site_settings for all
+  to authenticated using (has_permission('content')) with check (has_permission('content'));
+
 -- بيانات ابتدائية لأسعار الصرف والمعادن
 insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);
 insert into metal_prices (id, gold_ounce, silver_ounce) values (1, 2650, 30);
@@ -218,3 +234,5 @@ insert into categories (id, name_ar, name_en, name_fr) values
   ('bracelets', 'أساور', 'Bracelets', 'Bracelets'),
   ('masabih', 'مسابح', 'Prayer Beads', 'Chapelets');
 insert into metal_gram_prices (id) values (1);
+insert into site_settings (id, hero_title_ar, hero_title_en, hero_title_fr) values
+  (1, 'جواهر تُحاك بالضوء', 'Jewels Woven in Light', 'Des Bijoux Tissés de Lumière');
