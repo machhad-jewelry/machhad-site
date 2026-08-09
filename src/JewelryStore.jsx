@@ -872,6 +872,16 @@ const T = {
   weightRequired: { ar: "يرجى إدخال وزن صحيح بالجرام", en: "Please enter a valid weight in grams", fr: "Veuillez entrer un poids valide en grammes" },
   metalSelectionRequired: { ar: "يرجى تحديد نوع المعدن والعيار/النوع", en: "Please select the metal type and karat/type", fr: "Veuillez sélectionner le type de métal et le carat/type" },
   priceTickerNote: { ar: "هذه الأسعار لا تشمل المصنعية ويتم تحديث الأسعار كل دقيقة", en: "These prices do not include making charges, and prices are updated every minute", fr: "Ces prix n'incluent pas les frais de façon, et les prix sont mis à jour chaque minute" },
+  customDesignCta: { ar: "صمّم قطعتك الخاصة", en: "Design Your Own Piece", fr: "Créez Votre Pièce" },
+  customDesignTitle: { ar: "تصميم خاص", en: "Custom Design", fr: "Création Personnalisée" },
+  customDesignIntro: { ar: "اكتب حرفًا أو اسمًا، اختر المعدن والوزن، وخلي الذكاء الاصطناعي يولّد لك معاينة للتصميم", en: "Type a letter or name, choose the metal and weight, and let AI generate a preview of your design", fr: "Saisissez une lettre ou un nom, choisissez le métal et le poids, et laissez l'IA générer un aperçu" },
+  customDesignTextLabel: { ar: "الحرف أو الاسم", en: "Letter or Name", fr: "Lettre ou Nom" },
+  customDesignTextPlaceholder: { ar: "مثال: سارة", en: "e.g. Sarah", fr: "ex: Sarah" },
+  customDesignTextRequired: { ar: "يرجى كتابة الحرف أو الاسم", en: "Please type a letter or name", fr: "Veuillez saisir une lettre ou un nom" },
+  generateDesignBtn: { ar: "ولّد التصميم", en: "Generate Design", fr: "Générer le Design" },
+  generatingDesign: { ar: "جارِ توليد التصميم...", en: "Generating design...", fr: "Génération en cours..." },
+  customDesignFailed: { ar: "تعذّر توليد التصميم، حاول مجددًا", en: "Couldn't generate the design, try again", fr: "Échec de la génération, réessayez" },
+  customDesignAdded: { ar: "تمت إضافة التصميم للسلة", en: "Design added to cart", fr: "Design ajouté au panier" },
   dateFrom: { ar: "من تاريخ", en: "From Date", fr: "Date de Début" },
   dateTo: { ar: "إلى تاريخ", en: "To Date", fr: "Date de Fin" },
   tabReps: { ar: "المندوبين", en: "Sales Reps", fr: "Représentants" },
@@ -3115,6 +3125,171 @@ function AdminReports({ lang, orders, products, fmtPrice }) {
   );
 }
 
+// نافذة "تصميم خاص" على الموقع العام — الزبون يكتب حرف/اسم، يختار المعدن والوزن، ويولّد الذكاء
+// الاصطناعي معاينة للتصميم؛ عند "أضف للسلة" بيرجع من الخادم صنف حقيقي (مخفي) جاهز يضاف للسلة
+// ويمر بنفس مسار الشراء العادي (بما فيه حساب السعر الآمن من السيرفر عند إتمام الطلب)
+function CustomDesignModal({ lang, isRTL, displayFont, metalGramPrices, fmtPrice, onClose, onAdded }) {
+  const [text, setText] = useState("");
+  const [metalType, setMetalType] = useState("gold");
+  const [goldKarat, setGoldKarat] = useState(18);
+  const [silverType, setSilverType] = useState("male");
+  const [weightGrams, setWeightGrams] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+
+  const previewProduct = {
+    saleMethod: "weight",
+    metalType,
+    goldKarat: metalType === "gold" ? Number(goldKarat) : null,
+    silverType: metalType === "silver" ? silverType : null,
+    weightGrams: Number(weightGrams) || 0,
+  };
+  const previewRate = metalGramRateFor(previewProduct, metalGramPrices);
+  const previewPrice = computeWeightPrice(previewProduct, metalGramPrices);
+
+  const generate = async () => {
+    if (!text.trim()) {
+      setError(T.customDesignTextRequired[lang]);
+      return;
+    }
+    if (!(Number(weightGrams) > 0)) {
+      setError(T.weightRequired[lang]);
+      return;
+    }
+    setGenerating(true);
+    setError("");
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("generate-custom-design", {
+        body: {
+          text: text.trim(),
+          metalType,
+          goldKarat: metalType === "gold" ? Number(goldKarat) : null,
+          silverType: metalType === "silver" ? silverType : null,
+          weightGrams: Number(weightGrams),
+        },
+      });
+      if (fnError || data?.error) throw new Error(data?.error || fnError?.message || "failed");
+      setResult(productRowToApp(data.product));
+    } catch {
+      setError(T.customDesignFailed[lang]);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={onClose}>
+      <div className="dr-card dr-modal rounded-sm max-w-md w-full p-6 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{T.customDesignTitle[lang]}</h2>
+          <button onClick={onClose}><X size={18} color={THEME.ivoryDim} /></button>
+        </div>
+
+        {!result ? (
+          <>
+            <p className="text-xs mb-4" style={{ color: THEME.ivoryDim }}>{T.customDesignIntro[lang]}</p>
+
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.customDesignTextLabel[lang]}</label>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={T.customDesignTextPlaceholder[lang]}
+              maxLength={40}
+              className="w-full px-3 py-2 rounded-sm text-sm mb-3"
+              style={inputStyle}
+            />
+
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.metalTypeLabel[lang]}</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                onClick={() => setMetalType("gold")}
+                className="px-3 py-2 rounded-sm text-sm border"
+                style={{ borderColor: metalType === "gold" ? THEME.gold : THEME.surfaceLine, color: metalType === "gold" ? THEME.goldSoft : THEME.ivoryDim }}
+              >
+                {T.metalTypeGold[lang]}
+              </button>
+              <button
+                onClick={() => setMetalType("silver")}
+                className="px-3 py-2 rounded-sm text-sm border"
+                style={{ borderColor: metalType === "silver" ? THEME.gold : THEME.surfaceLine, color: metalType === "silver" ? THEME.goldSoft : THEME.ivoryDim }}
+              >
+                {T.metalTypeSilver[lang]}
+              </button>
+            </div>
+
+            {metalType === "gold" ? (
+              <div className="mb-3">
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.karatLabel[lang]}</label>
+                <select value={goldKarat} onChange={(e) => setGoldKarat(Number(e.target.value))} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                  {GOLD_KARATS.map((k) => (
+                    <option key={k} value={k} style={{ background: THEME.surface }}>{k}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="mb-3">
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.silverTypeLabel[lang]}</label>
+                <select value={silverType} onChange={(e) => setSilverType(e.target.value)} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+                  <option value="male" style={{ background: THEME.surface }}>{T.silverTypeMale[lang]}</option>
+                  <option value="female" style={{ background: THEME.surface }}>{T.silverTypeFemale[lang]}</option>
+                </select>
+              </div>
+            )}
+
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.weightGramsLabel[lang]}</label>
+            <input
+              type="number"
+              min="0"
+              value={weightGrams}
+              onChange={(e) => setWeightGrams(e.target.value)}
+              className="w-full px-3 py-2 rounded-sm text-sm mb-3"
+              style={inputStyle}
+            />
+
+            <p className="text-xs mb-4" style={{ color: THEME.ivoryDim }}>
+              {T.computedPriceLabel[lang]}: {previewRate ? fmtPrice(previewPrice) : T.weightPriceMissingRate[lang]}
+            </p>
+
+            {error && <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{error}</p>}
+
+            <button
+              onClick={generate}
+              disabled={generating}
+              className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+              style={{ opacity: generating ? 0.6 : 1 }}
+            >
+              {generating ? T.generatingDesign[lang] : T.generateDesignBtn[lang]}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="w-40 mx-auto rounded-sm overflow-hidden">
+              <img src={result.images[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+            <h3 className="text-center mt-4 text-lg" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{result.name[lang]}</h3>
+            <p className="text-center text-xs mt-1" style={{ color: THEME.ivoryDim }}>
+              {result.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(result, metalGramPrices) || 0)}
+            </p>
+            <p className="text-center mt-2" style={{ color: THEME.goldSoft }}>{fmtPrice(computeWeightPrice(result, metalGramPrices))}</p>
+            <button
+              onClick={() => {
+                onAdded(result);
+                onClose();
+              }}
+              className="w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+            >
+              {T.addToCart[lang]}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function JewelryStore() {
   const [lang, setLang] = useState("ar");
   const [currency, setCurrency] = useState("USD");
@@ -3128,6 +3303,7 @@ export default function JewelryStore() {
   const [selectedSize, setSelectedSize] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [announceIndex, setAnnounceIndex] = useState(0);
+  const [customDesignOpen, setCustomDesignOpen] = useState(false);
   const mostViewedScrollRef = useRef(null);
 
   useEffect(() => {
@@ -3699,9 +3875,18 @@ export default function JewelryStore() {
         <p className="max-w-xl mt-6 text-sm sm:text-base leading-relaxed" style={{ color: THEME.ivoryDim }}>
           {T.heroSub[lang]}
         </p>
-        <a href="#shop" className="mt-10 px-10 py-3.5 rounded-sm text-xs font-medium tracking-[0.18em] uppercase dr-btn-gold">
-          {T.cta[lang]}
-        </a>
+        <div className="mt-10 flex flex-wrap gap-4 justify-center">
+          <a href="#shop" className="px-10 py-3.5 rounded-sm text-xs font-medium tracking-[0.18em] uppercase dr-btn-gold">
+            {T.cta[lang]}
+          </a>
+          <button
+            onClick={() => setCustomDesignOpen(true)}
+            className="px-10 py-3.5 rounded-sm text-xs font-medium tracking-[0.18em] uppercase border"
+            style={{ borderColor: THEME.gold, color: THEME.goldSoft }}
+          >
+            {T.customDesignCta[lang]}
+          </button>
+        </div>
       </section>
 
       {/* Most viewed carousel */}
@@ -3974,6 +4159,22 @@ export default function JewelryStore() {
             )}
           </div>
         </div>
+      )}
+
+      {customDesignOpen && (
+        <CustomDesignModal
+          lang={lang}
+          isRTL={isRTL}
+          displayFont={displayFont}
+          metalGramPrices={metalGramPrices}
+          fmtPrice={fmtPrice}
+          onClose={() => setCustomDesignOpen(false)}
+          onAdded={(product) => {
+            setRawProducts((prev) => [...prev, product]);
+            addToCart(product, null, 1);
+            setCartOpen(true);
+          }}
+        />
       )}
 
       {/* Cart drawer */}

@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.translate-text]
 verify_jwt = true
+
+[functions.generate-custom-design]
+verify_jwt = true
