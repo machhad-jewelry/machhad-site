@@ -34,6 +34,7 @@ const OUTPUT_SCHEMA = {
     sale_method: { type: "string", enum: ["piece", "weight"] },
     price: { type: "number" },
     cost: { type: "number" },
+    stock: { type: "integer" },
     weight_grams: { type: "number" },
     metal_type: { type: "string", enum: ["gold", "silver", "none"] },
     gold_karat: { type: "integer", enum: [18, 21, 22, 0] },
@@ -46,7 +47,7 @@ const OUTPUT_SCHEMA = {
     "mat_ar", "mat_en", "mat_fr",
     "desc_ar", "desc_en", "desc_fr",
     "category_id", "color_hex",
-    "sale_method", "price", "cost", "weight_grams",
+    "sale_method", "price", "cost", "stock", "weight_grams",
     "metal_type", "gold_karat", "silver_type", "rep", "countries",
   ],
   additionalProperties: false,
@@ -106,6 +107,7 @@ Deno.serve(async (req) => {
         "- sale_method: 'weight' فقط إذا قال صراحة إنه يُباع بالوزن/بالغرام، وإلا 'piece' (الافتراضي).\n" +
         "- price: سعر البيع بالدولار إذا ذُكر، وإلا 0.\n" +
         "- cost: سعر التكلفة بالدولار إذا ذُكر، وإلا 0.\n" +
+        "- stock: الكمية المتوفرة (عدد القطع) إذا ذُكرت، وإلا 0.\n" +
         "- weight_grams: الوزن بالغرام إذا ذُكر (فقط عندما sale_method='weight')، وإلا 0.\n" +
         "- metal_type: 'gold' أو 'silver' فقط إذا ذُكر المعدن صراحة مرتبطًا بالبيع بالوزن، وإلا 'none'.\n" +
         "- gold_karat: 18 أو 21 أو 22 إذا ذُكر عيار الذهب، وإلا 0.\n" +

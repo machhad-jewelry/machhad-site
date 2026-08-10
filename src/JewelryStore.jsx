@@ -1143,6 +1143,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
         saleMethod: data.sale_method === "weight" ? "weight" : data.sale_method === "piece" ? "piece" : f.saleMethod,
         price: data.price > 0 ? String(data.price) : f.price,
         cost: data.cost > 0 ? String(data.cost) : f.cost,
+        stock: data.stock > 0 ? String(data.stock) : f.stock,
         weightGrams: data.weight_grams > 0 ? String(data.weight_grams) : f.weightGrams,
         metalType: data.metal_type === "gold" || data.metal_type === "silver" ? data.metal_type : f.metalType,
         goldKarat: GOLD_KARATS.includes(data.gold_karat) ? data.gold_karat : f.goldKarat,
