@@ -1124,7 +1124,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     setAiError("");
     try {
       const { data, error } = await supabase.functions.invoke("generate-product", {
-        body: { description: aiDesc.trim(), categories: categories.map((c) => ({ id: c.id, name: c.name })) },
+        body: { description: aiDesc.trim(), categories: categories.map((c) => ({ id: c.id, name: c.name })), reps },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message || "failed");
       setForm((f) => ({
@@ -1140,6 +1140,17 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
         descFr: data.desc_fr || f.descFr,
         cat: categories.some((c) => c.id === data.category_id) ? data.category_id : f.cat,
         color: data.color_hex || f.color,
+        saleMethod: data.sale_method === "weight" ? "weight" : data.sale_method === "piece" ? "piece" : f.saleMethod,
+        price: data.price > 0 ? String(data.price) : f.price,
+        cost: data.cost > 0 ? String(data.cost) : f.cost,
+        weightGrams: data.weight_grams > 0 ? String(data.weight_grams) : f.weightGrams,
+        metalType: data.metal_type === "gold" || data.metal_type === "silver" ? data.metal_type : f.metalType,
+        goldKarat: GOLD_KARATS.includes(data.gold_karat) ? data.gold_karat : f.goldKarat,
+        silverType: data.silver_type === "male" || data.silver_type === "female" ? data.silver_type : f.silverType,
+        rep: data.rep && reps.includes(data.rep) ? data.rep : f.rep,
+        countries: Array.isArray(data.countries) && data.countries.length
+          ? data.countries.filter((id) => COUNTRIES.some((c) => c.id === id))
+          : f.countries,
       }));
     } catch (err) {
       setAiError(T.aiError[lang]);
