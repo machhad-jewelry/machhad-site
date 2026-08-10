@@ -1,17 +1,17 @@
--- جداول متجر مشهد
+-- ============================================================================
+-- جداول متجر مشهد — مرجع توثيقي لبنية قاعدة البيانات الحية
+-- ============================================================================
+-- هذا الملف تُصقيف (idempotent) بالكامل: كل create table تستخدم "if not exists"،
+-- كل سياسة RLS تُحذف أولًا (drop policy if exists) قبل إعادة إنشائها، وكل إدخال
+-- بيانات ابتدائية يستخدم "on conflict do nothing". يعني تشغيله من جديد على قاعدة
+-- بيانات فيها بيانات حقيقية آمن تمامًا — ما رح يمسح أو يكرر أي شي.
+-- ⚠️ مع هيك: هذا الملف توثيقي بالدرجة الأولى، مو أداة ترحيل (migration) فعلية —
+-- أي تعديل جديد على قاعدة البيانات الحية بينفّذ مباشرة (عادة عبر Supabase
+-- Management API)، وبعدين ينعكس هون توثيقيًا. لا تشغّل هذا الملف كـ"مزامنة"
+-- بدون فهم إنه ما رح يطبّق أي ALTER TABLE على أعمدة موجودة أصلًا بقيم مختلفة.
+-- ============================================================================
 
--- تنظيف أي محاولة سابقة (آمن، ما في بيانات حقيقية لسا)
-drop table if exists order_items cascade;
-drop table if exists orders cascade;
-drop table if exists products cascade;
-drop table if exists reps cascade;
-drop table if exists exchange_rates cascade;
-drop table if exists metal_prices cascade;
-drop table if exists categories cascade;
-drop table if exists admin_users cascade;
-drop table if exists metal_gram_prices cascade;
-
-create table products (
+create table if not exists products (
   id text primary key,
   cat text not null,
   color text,
@@ -38,7 +38,7 @@ create table products (
   silver_type text
 );
 
-create table orders (
+create table if not exists orders (
   id text primary key,
   order_date date not null default current_date,
   country text not null,
@@ -48,7 +48,7 @@ create table orders (
   created_at timestamptz not null default now()
 );
 
-create table order_items (
+create table if not exists order_items (
   id bigint generated always as identity primary key,
   order_id text not null references orders(id) on delete cascade,
   product_id text,
@@ -59,12 +59,12 @@ create table order_items (
   rep text
 );
 
-create table reps (
+create table if not exists reps (
   id bigint generated always as identity primary key,
   name text unique not null
 );
 
-create table categories (
+create table if not exists categories (
   id text primary key,
   name_ar text not null,
   name_en text not null,
@@ -72,12 +72,12 @@ create table categories (
   created_at timestamptz not null default now()
 );
 
-create table exchange_rates (
+create table if not exists exchange_rates (
   currency text primary key,
   rate numeric not null
 );
 
-create table metal_prices (
+create table if not exists metal_prices (
   id integer primary key default 1,
   gold_ounce numeric not null,
   silver_ounce numeric not null,
@@ -87,7 +87,7 @@ create table metal_prices (
 
 -- حسابات المشرفين المحدودين (غير المشرف الأعلى) وصلاحياتهم — قائمة معرّفات أقسام لوحة الإدارة
 -- المسموح فيها لهذا المشرف (مثلًا: '{reps,categories}'). الـ id هو نفسه uuid حساب Supabase Auth.
-create table admin_users (
+create table if not exists admin_users (
   id uuid primary key,
   email text unique not null,
   permissions text[] not null default '{}',
@@ -96,7 +96,7 @@ create table admin_users (
 
 -- المصدر المركزي الوحيد لأسعار الذهب/الفضة بالجرام، تستخدمه الأصناف "المباعة بالوزن" —
 -- تعديل أي سعر هون ينعكس تلقائيًا (بالتطبيق) على كل صنف مرتبط، مستقل عن مؤشر الأونصة في metal_prices
-create table metal_gram_prices (
+create table if not exists metal_gram_prices (
   id integer primary key default 1,
   gold_18 numeric not null default 0,
   gold_21 numeric not null default 0,
@@ -108,7 +108,7 @@ create table metal_gram_prices (
 );
 
 -- نصوص عامة قابلة للتعديل من لوحة الإدارة بدون الحاجة لأي تعديل بالكود لاحقًا (حاليًا: جملة الواجهة الرئيسية)
-create table site_settings (
+create table if not exists site_settings (
   id integer primary key default 1,
   hero_title_ar text,
   hero_title_en text,
@@ -118,7 +118,7 @@ create table site_settings (
 );
 
 -- قائمة الإيميلات اللي بتستلم نسخة فاتورة PDF عند كل طلب جديد (يقرأها send-invoice بصلاحية الخادم)
-create table invoice_recipients (
+create table if not exists invoice_recipients (
   id bigint generated always as identity primary key,
   email text not null unique,
   created_at timestamptz not null default now()
@@ -163,14 +163,16 @@ $$;
 -- المنتجات: القراءة الكاملة (بما فيها التكلفة cost والأصناف المخفية) محصورة بالمشرفين المسجّلين دخولهم فقط.
 -- الزوار/الموقع العام ما إلهم أي صلاحية قراءة مباشرة على الجدول نفسه — بيقروا فقط من العرض العام
 -- "products_public" (بالأسفل) اللي ما فيه عمودي cost/rep وبيفلتر الأصناف المخفية تلقائيًا.
--- (2026-08-05: قبل هيك كانت products_public_read مفتوحة للجميع بدون قيود — أي حد يستدعي الـ API
--- مباشرة كان يقدر يشوف تكلفة كل صنف والأصناف المخفية، حتى لو الواجهة ما كانت تعرضها)
+drop policy if exists "products_admin_read" on products;
 create policy "products_admin_read" on products for select
   to authenticated using (true);
+drop policy if exists "products_admin_insert" on products;
 create policy "products_admin_insert" on products for insert
   to authenticated with check (has_permission('add'));
+drop policy if exists "products_admin_update" on products;
 create policy "products_admin_update" on products for update
   to authenticated using (has_permission('manage')) with check (has_permission('manage'));
+drop policy if exists "products_admin_delete" on products;
 create policy "products_admin_delete" on products for delete
   to authenticated using (has_permission('manage'));
 
@@ -189,63 +191,86 @@ grant select on products_public to anon, authenticated;
 -- الطلبات: الإدخال يتم حصرًا عبر دالة place_order (security definer بتتحقق من السعر/التكلفة/المخزون
 -- بنفسها، انظر supabase_schema_part2.sql) — ما في صلاحية إدخال مباشر على الجدولين لأي طرف،
 -- حتى المشرف. قراءتها تحتاج صلاحية 'sales' أو 'reports'.
+drop policy if exists "orders_admin_read" on orders;
 create policy "orders_admin_read" on orders for select
   to authenticated using (has_permission('sales') or has_permission('reports'));
 
+drop policy if exists "order_items_admin_read" on order_items;
 create policy "order_items_admin_read" on order_items for select
   to authenticated using (has_permission('sales') or has_permission('reports'));
 
 -- المندوبين: قراءة للجميع (تظهر بنموذج الإضافة)، تعديل يحتاج صلاحية 'reps'
+drop policy if exists "reps_public_read" on reps;
 create policy "reps_public_read" on reps for select using (true);
+drop policy if exists "reps_admin_write" on reps;
 create policy "reps_admin_write" on reps for all
   to authenticated using (has_permission('reps')) with check (has_permission('reps'));
 
 -- أسعار الصرف: تظهر للزوار بالواجهة، تعديلها يحتاج صلاحية 'rates'
+drop policy if exists "rates_public_read" on exchange_rates;
 create policy "rates_public_read" on exchange_rates for select using (true);
+drop policy if exists "rates_admin_write" on exchange_rates;
 create policy "rates_admin_write" on exchange_rates for all
   to authenticated using (has_permission('rates')) with check (has_permission('rates'));
 
 -- أسعار المعادن: تظهر للزوار بالواجهة، تعديلها يحتاج صلاحية 'metals'
+drop policy if exists "metals_public_read" on metal_prices;
 create policy "metals_public_read" on metal_prices for select using (true);
+drop policy if exists "metals_admin_write" on metal_prices;
 create policy "metals_admin_write" on metal_prices for all
   to authenticated using (has_permission('metals')) with check (has_permission('metals'));
 
 -- التصنيفات: قراءة للجميع (تظهر بفلتر المتجر ونموذج المنتج)، تعديلها يحتاج صلاحية 'categories'
+drop policy if exists "categories_public_read" on categories;
 create policy "categories_public_read" on categories for select using (true);
+drop policy if exists "categories_admin_write" on categories;
 create policy "categories_admin_write" on categories for all
   to authenticated using (has_permission('categories')) with check (has_permission('categories'));
 
 -- المشرفون: كل مشرف يشوف صف صلاحياته الخاص فقط (ليعرف أي أقسام تظهر إله)،
 -- والمشرف الأعلى وحده يقدر يشوف/يضيف/يعدّل/يحذف القائمة كاملة
+drop policy if exists "admin_users_self_or_super_read" on admin_users;
 create policy "admin_users_self_or_super_read" on admin_users for select
   to authenticated using (is_admin() or email = coalesce(auth.jwt() ->> 'email', ''));
+drop policy if exists "admin_users_super_write" on admin_users;
 create policy "admin_users_super_write" on admin_users for all
   to authenticated using (is_admin()) with check (is_admin());
 
 -- أسعار الذهب/الفضة بالجرام: تظهر للزوار (لعرض تفاصيل السعر بصفحة المنتج)، تعديلها يحتاج صلاحية 'metalRates'
+drop policy if exists "metal_gram_prices_public_read" on metal_gram_prices;
 create policy "metal_gram_prices_public_read" on metal_gram_prices for select using (true);
+drop policy if exists "metal_gram_prices_admin_write" on metal_gram_prices;
 create policy "metal_gram_prices_admin_write" on metal_gram_prices for all
   to authenticated using (has_permission('metalRates')) with check (has_permission('metalRates'));
 
 -- نصوص الواجهة العامة: تظهر للزوار (تُعرض بالصفحة الرئيسية)، تعديلها يحتاج صلاحية 'content'
+drop policy if exists "site_settings_public_read" on site_settings;
 create policy "site_settings_public_read" on site_settings for select using (true);
+drop policy if exists "site_settings_admin_write" on site_settings;
 create policy "site_settings_admin_write" on site_settings for all
   to authenticated using (has_permission('content')) with check (has_permission('content'));
 
 -- إيميلات الفواتير: لا قراءة/كتابة عامة إطلاقًا — فقط مشرف يملك صلاحية 'invoices'
 -- (الوظيفة الخادمية send-invoice تقرأ الجدول مباشرة بصلاحية الخادم، بدون المرور بهاي السياسة)
+drop policy if exists "invoice_recipients_admin_all" on invoice_recipients;
 create policy "invoice_recipients_admin_all" on invoice_recipients for all
   to authenticated using (has_permission('invoices')) with check (has_permission('invoices'));
 
--- بيانات ابتدائية لأسعار الصرف والمعادن
-insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);
-insert into metal_prices (id, gold_ounce, silver_ounce) values (1, 2650, 30);
-insert into reps (name) values ('محمود'), ('رشاد'), ('جميل');
+-- بيانات ابتدائية لأسعار الصرف والمعادن — on conflict do nothing يخليها آمنة تمامًا لإعادة التشغيل
+insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605)
+  on conflict (currency) do nothing;
+insert into metal_prices (id, gold_ounce, silver_ounce) values (1, 2650, 30)
+  on conflict (id) do nothing;
+insert into reps (name) values ('محمود'), ('رشاد'), ('جميل')
+  on conflict (name) do nothing;
 insert into categories (id, name_ar, name_en, name_fr) values
   ('rings', 'خواتم', 'Rings', 'Bagues'),
   ('necklaces', 'قلائد', 'Necklaces', 'Colliers'),
   ('bracelets', 'أساور', 'Bracelets', 'Bracelets'),
-  ('masabih', 'مسابح', 'Prayer Beads', 'Chapelets');
-insert into metal_gram_prices (id) values (1);
+  ('masabih', 'مسابح', 'Prayer Beads', 'Chapelets')
+  on conflict (id) do nothing;
+insert into metal_gram_prices (id) values (1)
+  on conflict (id) do nothing;
 insert into site_settings (id, hero_title_ar, hero_title_en, hero_title_fr) values
-  (1, 'جواهر تُحاك بالضوء', 'Jewels Woven in Light', 'Des Bijoux Tissés de Lumière');
+  (1, 'جواهر تُحاك بالضوء', 'Jewels Woven in Light', 'Des Bijoux Tissés de Lumière')
+  on conflict (id) do nothing;

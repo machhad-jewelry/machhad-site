@@ -1197,7 +1197,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       )
     : 0;
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.nameAr && !form.nameEn) {
       setMsg(T.fillRequired[lang]);
       return;
@@ -1243,7 +1243,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     }
     const id = "custom-" + Date.now();
     const barcode = generateBarcode(products.map((p) => p.barcode).filter(Boolean));
-    onSave({
+    const ok = await onSave({
       id,
       cat: form.cat,
       color: form.color,
@@ -1265,6 +1265,10 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
     });
+    if (!ok) {
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setMsg(T.productSaved[lang]);
     setTimeout(() => setMsg(""), 2000);
     setForm({
@@ -2428,7 +2432,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       )
     : 0;
 
-  const submit = () => {
+  const submit = async () => {
     if (isWeightSale) {
       if (!form.metalType || (form.metalType === "gold" && !form.goldKarat) || (form.metalType === "silver" && !form.silverType)) {
         setFormError(T.metalSelectionRequired[lang]);
@@ -2462,7 +2466,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       setRepError(true);
       return;
     }
-    onSave({
+    const ok = await onSave({
       ...product,
       cat: form.cat,
       color: form.color,
@@ -2483,6 +2487,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
     });
+    if (!ok) setFormError(T.updateFailed[lang]);
   };
 
   return (
@@ -2675,10 +2680,16 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
   const [msg, setMsg] = useState("");
   const [filterCountry, setFilterCountry] = useState("all");
 
-  const doDelete = (id) => {
-    onDelete(id);
+  const doDelete = async (id) => {
+    const ok = await onDelete(id);
     setConfirmId(null);
-    setMsg(T.productDeleted[lang]);
+    setMsg(ok ? T.productDeleted[lang] : T.updateFailed[lang]);
+    setTimeout(() => setMsg(""), 2000);
+  };
+
+  const doToggleHide = async (id) => {
+    const ok = await onToggleHide(id);
+    setMsg(ok ? T.changesSaved[lang] : T.updateFailed[lang]);
     setTimeout(() => setMsg(""), 2000);
   };
 
@@ -2761,7 +2772,7 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
                   {T.editProduct[lang]}
                 </button>
                 <button
-                  onClick={() => onToggleHide(p.id)}
+                  onClick={() => doToggleHide(p.id)}
                   className="flex-1 sm:flex-none text-xs px-3 py-2 rounded-sm border"
                   style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
                 >
@@ -2788,11 +2799,13 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
           categories={categories}
           metalGramPrices={metalGramPrices}
           onCancel={() => setEditingId(null)}
-          onSave={(updated) => {
-            onEdit(updated);
+          onSave={async (updated) => {
+            const ok = await onEdit(updated);
+            if (!ok) return false;
             setEditingId(null);
             setMsg(T.changesSaved[lang]);
             setTimeout(() => setMsg(""), 2000);
+            return true;
           }}
         />
       )}
@@ -3869,8 +3882,9 @@ export default function JewelryStore() {
               lang={lang}
               onSave={async (p) => {
                 const { error } = await supabase.from("products").insert(productAppToRow(p));
-                if (error) return;
+                if (error) return false;
                 setRawProducts((prev) => [...prev, p]);
+                return true;
               }}
               reps={reps}
               products={products}
@@ -3886,20 +3900,23 @@ export default function JewelryStore() {
               metalGramPrices={metalGramPrices}
               onDelete={async (id) => {
                 const { error } = await supabase.from("products").delete().eq("id", id);
-                if (error) return;
+                if (error) return false;
                 setRawProducts((prev) => prev.filter((p) => p.id !== id));
+                return true;
               }}
               onToggleHide={async (id) => {
                 const target = products.find((p) => p.id === id);
-                if (!target) return;
+                if (!target) return false;
                 const { error } = await supabase.from("products").update({ hidden: !target.hidden }).eq("id", id);
-                if (error) return;
+                if (error) return false;
                 setRawProducts((prev) => prev.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p)));
+                return true;
               }}
               onEdit={async (updated) => {
                 const { error } = await supabase.from("products").update(productAppToRow(updated)).eq("id", updated.id);
-                if (error) return;
+                if (error) return false;
                 setRawProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                return true;
               }}
               reps={reps}
               categories={categories}
