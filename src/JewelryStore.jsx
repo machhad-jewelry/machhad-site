@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -14,7 +14,7 @@ const IS_ADMIN_DOMAIN =
 // المشرف الأعلى (صاحب المتجر) — الوحيد يلي يقدر يضيف/يحذف مشرفين آخرين ويملك كل الصلاحيات دايمًا
 const SUPER_ADMIN_EMAIL = "rachad.fakouri@gmail.com";
 // معرّفات الأقسام القابلة لمنح صلاحية عليها لمشرف محدود (تطابق أقسام لوحة الإدارة)
-const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories", "content"];
+const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories", "content", "invoices"];
 const ADMIN_PERMISSION_LABEL_KEYS = {
   add: "tabAddProduct",
   manage: "tabManageProducts",
@@ -27,6 +27,7 @@ const ADMIN_PERMISSION_LABEL_KEYS = {
   reps: "tabReps",
   categories: "tabCategories",
   content: "tabSiteContent",
+  invoices: "tabInvoiceRecipients",
 };
 
 const LOGO_SRC =
@@ -889,6 +890,16 @@ const T = {
   heroTitleFrLabel: { ar: "الجملة (فرنسي)", en: "Tagline (French)", fr: "Slogan (Français)" },
   saveContent: { ar: "حفظ الجملة", en: "Save Tagline", fr: "Enregistrer le Slogan" },
   contentSaved: { ar: "تم حفظ الجملة", en: "Tagline saved", fr: "Slogan enregistré" },
+  tabInvoiceRecipients: { ar: "إرسال الفواتير", en: "Invoice Recipients", fr: "Destinataires des Factures" },
+  invoiceRecipientsIntro: { ar: "أي بريد إلكتروني تضيفه هون بياخد نسخة من فاتورة PDF عند كل طلب جديد", en: "Any email added here receives a PDF invoice copy for every new order", fr: "Chaque e-mail ajouté ici reçoit une copie de la facture PDF pour chaque nouvelle commande" },
+  emailPlaceholder: { ar: "بريد إلكتروني", en: "Email address", fr: "Adresse e-mail" },
+  addEmail: { ar: "إضافة", en: "Add", fr: "Ajouter" },
+  emailAdded: { ar: "تمت إضافة البريد", en: "Email added", fr: "E-mail ajouté" },
+  emailDeleted: { ar: "تم حذف البريد", en: "Email deleted", fr: "E-mail supprimé" },
+  emailAlreadyExists: { ar: "هذا البريد مضاف مسبقًا", en: "This email is already added", fr: "Cet e-mail est déjà ajouté" },
+  invalidEmail: { ar: "بريد إلكتروني غير صحيح", en: "Invalid email address", fr: "Adresse e-mail invalide" },
+  confirmDeleteEmail: { ar: "حذف هذا البريد؟", en: "Delete this email?", fr: "Supprimer cet e-mail ?" },
+  noEmailsYet: { ar: "ما في بريد إلكتروني مضاف بعد", en: "No emails added yet", fr: "Aucun e-mail ajouté pour l'instant" },
   dateFrom: { ar: "من تاريخ", en: "From Date", fr: "Date de Début" },
   dateTo: { ar: "إلى تاريخ", en: "To Date", fr: "Date de Fin" },
   tabReps: { ar: "المندوبين", en: "Sales Reps", fr: "Représentants" },
@@ -2207,6 +2218,116 @@ function AdminSiteContent({ lang, heroTitle, setHeroTitle }) {
   );
 }
 
+// إدارة قائمة البريد الإلكتروني اللي بتستلم نسخة فاتورة PDF عند كل طلب جديد — send-invoice
+// بتقرأ من نفس الجدول مباشرة (بصلاحية الخادم)، فأي إضافة/حذف هون بينعكس فورًا بدون أي نشر جديد
+function AdminInvoiceRecipients({ lang, invoiceRecipients, setInvoiceRecipients }) {
+  const [newEmail, setNewEmail] = useState("");
+  const [confirmId, setConfirmId] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const addEmail = async () => {
+    const email = newEmail.trim().toLowerCase();
+    if (!emailRe.test(email)) {
+      setMsgIsError(true);
+      setMsg(T.invalidEmail[lang]);
+      return;
+    }
+    if (invoiceRecipients.some((r) => r.email === email)) {
+      setMsgIsError(true);
+      setMsg(T.emailAlreadyExists[lang]);
+      return;
+    }
+    const { data, error } = await supabase.from("invoice_recipients").insert({ email }).select().single();
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
+    setInvoiceRecipients([...invoiceRecipients, data]);
+    setNewEmail("");
+    setMsgIsError(false);
+    setMsg(T.emailAdded[lang]);
+  };
+
+  const deleteEmail = async (id) => {
+    const { error } = await supabase.from("invoice_recipients").delete().eq("id", id);
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
+    setInvoiceRecipients(invoiceRecipients.filter((r) => r.id !== id));
+    setConfirmId(null);
+    setMsgIsError(false);
+    setMsg(T.emailDeleted[lang]);
+  };
+
+  return (
+    <div className="max-w-md mx-auto">
+      <p className="text-xs mb-6" style={{ color: THEME.ivoryDim, opacity: 0.85 }}>{T.invoiceRecipientsIntro[lang]}</p>
+
+      <div className="flex gap-2 mb-6">
+        <input
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          placeholder={T.emailPlaceholder[lang]}
+          type="email"
+          className="flex-1 px-3 py-2 rounded-sm text-sm"
+          style={inputStyle}
+        />
+        <button onClick={addEmail} className="px-4 py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold">
+          {T.addEmail[lang]}
+        </button>
+      </div>
+
+      {msg && <p className="text-sm mb-4 text-center" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
+
+      {invoiceRecipients.length === 0 ? (
+        <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noEmailsYet[lang]}</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {invoiceRecipients.map((r) => (
+            <div
+              key={r.id}
+              className="flex flex-wrap items-center gap-2 p-3 rounded-sm"
+              style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+            >
+              <span className="flex-1 text-sm" style={{ color: THEME.ivory }}>{r.email}</span>
+              {confirmId === r.id ? (
+                <>
+                  <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.confirmDeleteEmail[lang]}</span>
+                  <button onClick={() => deleteEmail(r.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
+                    {T.confirmYes[lang]}
+                  </button>
+                  <button
+                    onClick={() => setConfirmId(null)}
+                    className="text-xs px-3 py-1.5 rounded-sm border"
+                    style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                  >
+                    {T.confirmCancel[lang]}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmId(r.id)}
+                  className="text-xs px-3 py-1.5 rounded-sm border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.deleteProduct[lang]}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminExchangeRates({ lang, rates, setRates }) {
   const [draft, setDraft] = useState({ XAF: String(rates.XAF), XOF: String(rates.XOF) });
   const [msg, setMsg] = useState("");
@@ -3378,6 +3499,7 @@ export default function JewelryStore() {
   const [rawProducts, setRawProducts] = useState([]);
   const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
   const [heroTitle, setHeroTitle] = useState({ ar: T.heroTitle.ar, en: T.heroTitle.en, fr: T.heroTitle.fr });
+  const [invoiceRecipients, setInvoiceRecipients] = useState([]);
   // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
   // أي تعديل على سعر الجرام ينعكس فورًا على كل مكان بالموقع بيستخدم products.price، بدون لمس كل صنف يدويًا
   const products = useMemo(
@@ -3460,6 +3582,21 @@ export default function JewelryStore() {
         setPermissionsLoaded(true);
       });
   }, [currentAdminEmail, isSuperAdmin]);
+
+  // قائمة إيميلات الفواتير حساسة (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله، مش جزء من التحميل العام
+  useEffect(() => {
+    if (!currentAdminEmail) {
+      setInvoiceRecipients([]);
+      return;
+    }
+    supabase
+      .from("invoice_recipients")
+      .select("*")
+      .order("created_at")
+      .then(({ data }) => {
+        if (data) setInvoiceRecipients(data);
+      });
+  }, [currentAdminEmail]);
 
   // ينقل التبويب الحالي لأول قسم مسموح فيه إذا كان المشرف مش صاحب صلاحية على التبويب الحالي
   useEffect(() => {
@@ -3689,9 +3826,9 @@ export default function JewelryStore() {
             </button>
           </div>
         </header>
-        <div className="px-5 sm:px-10 py-8">
+        <div className="px-5 sm:px-10 py-8 flex flex-col sm:flex-row gap-4 sm:gap-6">
           <div
-            className="flex gap-2 mb-8 overflow-x-auto"
+            className="flex flex-row sm:flex-col gap-2 overflow-x-auto sm:overflow-x-visible sm:w-56 flex-shrink-0"
             style={{ scrollbarWidth: "thin", WebkitOverflowScrolling: "touch" }}
           >
             {[
@@ -3706,6 +3843,7 @@ export default function JewelryStore() {
               { id: "reps", label: T.tabReps[lang], Icon: Users },
               { id: "categories", label: T.tabCategories[lang], Icon: Tag },
               { id: "content", label: T.tabSiteContent[lang], Icon: Type },
+              { id: "invoices", label: T.tabInvoiceRecipients[lang], Icon: Mail },
             ]
               .filter((t) => myPermissions.includes(t.id))
               .concat(isSuperAdmin ? [{ id: "admins", label: T.tabAdmins[lang], Icon: Shield }] : [])
@@ -3713,7 +3851,7 @@ export default function JewelryStore() {
               <button
                 key={id}
                 onClick={() => setAdminTab(id)}
-                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs tracking-wide uppercase border whitespace-nowrap"
+                className="flex-shrink-0 sm:flex-shrink sm:w-full flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs tracking-wide uppercase border whitespace-nowrap sm:justify-start"
                 style={{
                   borderColor: THEME.surfaceLine,
                   background: adminTab === id ? THEME.gold : "transparent",
@@ -3725,6 +3863,7 @@ export default function JewelryStore() {
               </button>
             ))}
           </div>
+          <div className="flex-1 min-w-0">
           {adminTab === "add" && (
             <AdminAddProduct
               lang={lang}
@@ -3793,7 +3932,11 @@ export default function JewelryStore() {
           {adminTab === "content" && (
             <AdminSiteContent lang={lang} heroTitle={heroTitle} setHeroTitle={setHeroTitle} />
           )}
+          {adminTab === "invoices" && (
+            <AdminInvoiceRecipients lang={lang} invoiceRecipients={invoiceRecipients} setInvoiceRecipients={setInvoiceRecipients} />
+          )}
           {adminTab === "admins" && isSuperAdmin && <AdminUsers lang={lang} />}
+          </div>
         </div>
       </div>
     );

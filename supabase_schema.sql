@@ -117,6 +117,13 @@ create table site_settings (
   constraint single_row_settings check (id = 1)
 );
 
+-- قائمة الإيميلات اللي بتستلم نسخة فاتورة PDF عند كل طلب جديد (يقرأها send-invoice بصلاحية الخادم)
+create table invoice_recipients (
+  id bigint generated always as identity primary key,
+  email text not null unique,
+  created_at timestamptz not null default now()
+);
+
 -- تفعيل الحماية على مستوى الصفوف
 alter table products enable row level security;
 alter table orders enable row level security;
@@ -128,6 +135,7 @@ alter table categories enable row level security;
 alter table admin_users enable row level security;
 alter table metal_gram_prices enable row level security;
 alter table site_settings enable row level security;
+alter table invoice_recipients enable row level security;
 
 -- المشرف الأعلى (صاحب المتجر) — الوحيد يلي يملك كل الصلاحيات دايمًا بغض النظر عن جدول admin_users
 create or replace function is_admin()
@@ -223,6 +231,11 @@ create policy "metal_gram_prices_admin_write" on metal_gram_prices for all
 create policy "site_settings_public_read" on site_settings for select using (true);
 create policy "site_settings_admin_write" on site_settings for all
   to authenticated using (has_permission('content')) with check (has_permission('content'));
+
+-- إيميلات الفواتير: لا قراءة/كتابة عامة إطلاقًا — فقط مشرف يملك صلاحية 'invoices'
+-- (الوظيفة الخادمية send-invoice تقرأ الجدول مباشرة بصلاحية الخادم، بدون المرور بهاي السياسة)
+create policy "invoice_recipients_admin_all" on invoice_recipients for all
+  to authenticated using (has_permission('invoices')) with check (has_permission('invoices'));
 
 -- بيانات ابتدائية لأسعار الصرف والمعادن
 insert into exchange_rates (currency, rate) values ('XAF', 605), ('XOF', 605);

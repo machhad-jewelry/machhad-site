@@ -31,6 +31,11 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // قائمة المستلمين تُدار من لوحة الإدارة (جدول invoice_recipients) — لو فاضية لأي سبب،
+    // نرجع لإيميل المالك الافتراضي حتى ما تنقطع الإشعارات
+    const { data: recipientRows } = await supabaseAdmin.from("invoice_recipients").select("email");
+    const recipientEmails = recipientRows && recipientRows.length ? recipientRows.map((r: any) => r.email) : [OWNER_EMAIL];
+
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("orders")
       .select("*")
@@ -73,7 +78,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         from: "Machhad Store <onboarding@resend.dev>",
-        to: [OWNER_EMAIL],
+        to: recipientEmails,
         subject: `طلب جديد #${order.id} — مشهد`,
         html,
         attachments: [{ filename: `invoice-${order.id}.pdf`, content: pdfBase64 }],
