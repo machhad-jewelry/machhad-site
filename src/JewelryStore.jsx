@@ -818,6 +818,7 @@ const T = {
   aiListening: { ar: "جارٍ الاستماع...", en: "Listening...", fr: "Écoute en cours..." },
   aiGenerating: { ar: "جارٍ التوليد...", en: "Generating...", fr: "Génération..." },
   aiError: { ar: "تعذر التوليد، حاول مرة أخرى أو أعد صياغة الوصف", en: "Couldn't generate, try again or rephrase the description", fr: "Échec de la génération, réessayez ou reformulez la description" },
+  aiCostWarning: { ar: "تنبيه: التكلفة المقترحة أعلى من أو تساوي سعر البيع — راجع الرقمين قبل الحفظ", en: "Warning: the suggested cost is equal to or higher than the price — double-check both before saving", fr: "Attention : le coût suggéré est égal ou supérieur au prix — vérifiez avant d'enregistrer" },
   micNotSupported: { ar: "التسجيل الصوتي غير مدعوم بهذا المتصفح", en: "Voice input is not supported in this browser", fr: "La saisie vocale n'est pas prise en charge par ce navigateur" },
   sizeLabel: { ar: "المقاس", en: "Size", fr: "Taille" },
   selectSize: { ar: "يرجى اختيار المقاس أولًا", en: "Please select a size first", fr: "Veuillez d'abord choisir une taille" },
@@ -1100,6 +1101,11 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
 
+  // يوقف التسجيل الصوتي لو المشرف بدّل التبويب وهو لسا شغال، حتى ما يضل الميكروفون فاتح بالخلفية
+  useEffect(() => {
+    return () => recognitionRef.current?.stop();
+  }, []);
+
   const SpeechRecognitionCtor =
     typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   const speechSupported = !!SpeechRecognitionCtor;
@@ -1138,6 +1144,15 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
         body: { description: aiDesc.trim(), categories: categories.map((c) => ({ id: c.id, name: c.name })), reps },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message || "failed");
+      // حدود منطقية على الأرقام اللي يرجّعها الذكاء الاصطناعي — لو رقم هلوسة (مثلًا سعر بالملايين)
+      // منرفضه ونخلي الحقل فاضي للمشرف يعبيه يدويًا، بدل ما نثق فيه ونطبّقه مباشرة على الموقع الحي
+      const MAX_AI_PRICE = 50000;
+      const MAX_AI_STOCK = 100000;
+      const MAX_AI_WEIGHT_GRAMS = 1000;
+      const resolvedPrice = data.price > 0 && data.price <= MAX_AI_PRICE ? Number(data.price) : null;
+      const resolvedCost = data.cost > 0 && data.cost <= MAX_AI_PRICE ? Number(data.cost) : null;
+      const resolvedStock = data.stock > 0 && data.stock <= MAX_AI_STOCK ? Number(data.stock) : null;
+      const resolvedWeight = data.weight_grams > 0 && data.weight_grams <= MAX_AI_WEIGHT_GRAMS ? Number(data.weight_grams) : null;
       setForm((f) => ({
         ...f,
         nameAr: data.name_ar || f.nameAr,
@@ -1152,10 +1167,10 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
         cat: categories.some((c) => c.id === data.category_id) ? data.category_id : f.cat,
         color: data.color_hex || f.color,
         saleMethod: data.sale_method === "weight" ? "weight" : data.sale_method === "piece" ? "piece" : f.saleMethod,
-        price: data.price > 0 ? String(data.price) : f.price,
-        cost: data.cost > 0 ? String(data.cost) : f.cost,
-        stock: data.stock > 0 ? String(data.stock) : f.stock,
-        weightGrams: data.weight_grams > 0 ? String(data.weight_grams) : f.weightGrams,
+        price: resolvedPrice != null ? String(resolvedPrice) : f.price,
+        cost: resolvedCost != null ? String(resolvedCost) : f.cost,
+        stock: resolvedStock != null ? String(resolvedStock) : f.stock,
+        weightGrams: resolvedWeight != null ? String(resolvedWeight) : f.weightGrams,
         metalType: data.metal_type === "gold" || data.metal_type === "silver" ? data.metal_type : f.metalType,
         goldKarat: GOLD_KARATS.includes(data.gold_karat) ? data.gold_karat : f.goldKarat,
         silverType: data.silver_type === "male" || data.silver_type === "female" ? data.silver_type : f.silverType,
@@ -1164,6 +1179,9 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
           ? data.countries.filter((id) => COUNTRIES.some((c) => c.id === id))
           : f.countries,
       }));
+      if (resolvedCost != null && resolvedPrice != null && resolvedCost >= resolvedPrice) {
+        setAiError(T.aiCostWarning[lang]);
+      }
     } catch (err) {
       setAiError(T.aiError[lang]);
     } finally {
@@ -1527,6 +1545,7 @@ function AdminReps({ lang, reps, setReps }) {
   const [editValue, setEditValue] = useState("");
   const [confirmIdx, setConfirmIdx] = useState(null);
   const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
 
@@ -1534,13 +1553,19 @@ function AdminReps({ lang, reps, setReps }) {
     const name = newRep.trim();
     if (!name) return;
     if (reps.includes(name)) {
+      setMsgIsError(true);
       setMsg(T.repAlreadyExists[lang]);
       return;
     }
     const { error } = await supabase.from("reps").insert({ name });
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setReps([...reps, name]);
     setNewRep("");
+    setMsgIsError(false);
     setMsg(T.repAdded[lang]);
   };
 
@@ -1554,18 +1579,29 @@ function AdminReps({ lang, reps, setReps }) {
     if (!name) return;
     const oldName = reps[idx];
     const { error } = await supabase.from("reps").update({ name }).eq("name", oldName);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setReps(reps.map((r, i) => (i === idx ? name : r)));
     setEditingIdx(null);
+    setMsgIsError(false);
     setMsg(T.repUpdated[lang]);
   };
 
   const deleteRep = async (idx) => {
     const name = reps[idx];
     const { error } = await supabase.from("reps").delete().eq("name", name);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      setConfirmIdx(null);
+      return;
+    }
     setReps(reps.filter((_, i) => i !== idx));
     setConfirmIdx(null);
+    setMsgIsError(false);
     setMsg(T.repDeleted[lang]);
   };
 
@@ -1584,7 +1620,7 @@ function AdminReps({ lang, reps, setReps }) {
         </button>
       </div>
 
-      {msg && <p className="text-sm mb-4 text-center" style={{ color: THEME.goldSoft }}>{msg}</p>}
+      {msg && <p className="text-sm mb-4 text-center" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
 
       <div className="flex flex-col gap-2">
         {reps.map((r, idx) => (
@@ -1659,6 +1695,7 @@ function AdminCategories({ lang, categories, setCategories }) {
   const [editForm, setEditForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
   const [confirmId, setConfirmId] = useState(null);
   const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
   const [translating, setTranslating] = useState(false);
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
@@ -1666,6 +1703,7 @@ function AdminCategories({ lang, categories, setCategories }) {
   const translateName = async () => {
     const nameAr = form.nameAr.trim();
     if (!nameAr) {
+      setMsgIsError(true);
       setMsg(T.translateNeedsArabic[lang]);
       return;
     }
@@ -1677,7 +1715,9 @@ function AdminCategories({ lang, categories, setCategories }) {
       const isArabic = (s) => /[؀-ۿ]/.test(s || "");
       if (isArabic(data.name_en) || isArabic(data.name_fr)) throw new Error("translation returned Arabic text");
       setForm((f) => ({ ...f, nameEn: data.name_en || f.nameEn, nameFr: data.name_fr || f.nameFr }));
+      setMsgIsError(false);
     } catch {
+      setMsgIsError(true);
       setMsg(T.translateFailed[lang]);
     } finally {
       setTranslating(false);
@@ -1689,6 +1729,7 @@ function AdminCategories({ lang, categories, setCategories }) {
     const nameEn = form.nameEn.trim();
     const nameFr = form.nameFr.trim();
     if (!nameAr && !nameEn) {
+      setMsgIsError(true);
       setMsg(T.fillRequired[lang]);
       return;
     }
@@ -1696,9 +1737,14 @@ function AdminCategories({ lang, categories, setCategories }) {
     if (!id || categories.some((c) => c.id === id)) id = "cat-" + Date.now();
     const row = { id, name_ar: nameAr || nameEn, name_en: nameEn || nameAr, name_fr: nameFr || nameEn || nameAr };
     const { error } = await supabase.from("categories").insert(row);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setCategories([...categories, categoryRowToApp(row)]);
     setForm({ nameAr: "", nameEn: "", nameFr: "" });
+    setMsgIsError(false);
     setMsg(T.categoryAdded[lang]);
   };
 
@@ -1716,17 +1762,28 @@ function AdminCategories({ lang, categories, setCategories }) {
       .from("categories")
       .update({ name_ar: nameAr, name_en: nameEn, name_fr: nameFr })
       .eq("id", id);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setCategories(categories.map((c) => (c.id === id ? { ...c, name: { ar: nameAr, en: nameEn, fr: nameFr } } : c)));
     setEditingId(null);
+    setMsgIsError(false);
     setMsg(T.categoryUpdated[lang]);
   };
 
   const deleteCategory = async (id) => {
     const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      setConfirmId(null);
+      return;
+    }
     setCategories(categories.filter((c) => c.id !== id));
     setConfirmId(null);
+    setMsgIsError(false);
     setMsg(T.categoryDeleted[lang]);
   };
 
@@ -1749,7 +1806,7 @@ function AdminCategories({ lang, categories, setCategories }) {
         {T.addCategory[lang]}
       </button>
 
-      {msg && <p className="text-sm mb-4 text-center" style={{ color: THEME.goldSoft }}>{msg}</p>}
+      {msg && <p className="text-sm mb-4 text-center" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
 
       <div className="flex flex-col gap-2">
         {categories.map((c) => (
@@ -2335,6 +2392,7 @@ function AdminInvoiceRecipients({ lang, invoiceRecipients, setInvoiceRecipients 
 function AdminExchangeRates({ lang, rates, setRates }) {
   const [draft, setDraft] = useState({ XAF: String(rates.XAF), XOF: String(rates.XOF) });
   const [msg, setMsg] = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
 
   const save = async () => {
     const XAF = Number(draft.XAF) || rates.XAF;
@@ -2343,8 +2401,13 @@ function AdminExchangeRates({ lang, rates, setRates }) {
       { currency: "XAF", rate: XAF },
       { currency: "XOF", rate: XOF },
     ]);
-    if (error) return;
+    if (error) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     setRates((prev) => ({ ...prev, XAF, XOF }));
+    setMsgIsError(false);
     setMsg(T.ratesSaved[lang]);
   };
 
@@ -2376,7 +2439,7 @@ function AdminExchangeRates({ lang, rates, setRates }) {
         </div>
       ))}
 
-      {msg && <p className="text-sm mb-3" style={{ color: THEME.goldSoft }}>{msg}</p>}
+      {msg && <p className="text-sm mb-3" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
       <button onClick={save} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">
         {T.saveRates[lang]}
       </button>
@@ -2838,7 +2901,12 @@ function AdminInventory({ lang, products, rates }) {
       return { ...country, items, totalValue };
     });
 
-  const grandTotal = byCountry.reduce((sum, c) => sum + c.totalValue, 0);
+  // الإجمالي العام يُحسب من الأصناف الظاهرة مرّة واحدة لكل صنف — مش بجمع إجماليات كل بلد فوق بعضها،
+  // لأنه صنف متوفر بأكتر من بلد بيتكرر بأكتر من "دلو" بلد بالتفصيل أعلاه، وجمعهم كان يضاعف قيمته بالخطأ
+  const visibleProducts = products.filter(
+    (p) => !p.hidden && (filterRep === "all" || p.rep === filterRep) && (filterCountry === "all" || p.countries.includes(filterCountry))
+  );
+  const grandTotal = visibleProducts.reduce((sum, p) => sum + p.stock * (p.cost || 0), 0);
 
   return (
     <div className="max-w-3xl mx-auto">
