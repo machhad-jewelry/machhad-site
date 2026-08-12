@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail, Contact } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { generateInvoicePdf } from "./invoicePdf";
@@ -14,7 +14,7 @@ const IS_ADMIN_DOMAIN =
 // المشرف الأعلى (صاحب المتجر) — الوحيد يلي يقدر يضيف/يحذف مشرفين آخرين ويملك كل الصلاحيات دايمًا
 const SUPER_ADMIN_EMAIL = "rachad.fakouri@gmail.com";
 // معرّفات الأقسام القابلة لمنح صلاحية عليها لمشرف محدود (تطابق أقسام لوحة الإدارة)
-const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories", "content", "invoices"];
+const ADMIN_PERMISSION_IDS = ["add", "manage", "sales", "reports", "rates", "inventory", "metals", "metalRates", "reps", "categories", "content", "invoices", "customers"];
 const ADMIN_PERMISSION_LABEL_KEYS = {
   add: "tabAddProduct",
   manage: "tabManageProducts",
@@ -28,6 +28,7 @@ const ADMIN_PERMISSION_LABEL_KEYS = {
   categories: "tabCategories",
   content: "tabSiteContent",
   invoices: "tabInvoiceRecipients",
+  customers: "tabCustomers",
 };
 
 const LOGO_SRC =
@@ -678,6 +679,8 @@ function orderRowToApp(row, items) {
     payment: row.payment,
     customerName: row.customer_name || "",
     customerPhone: row.customer_phone || "",
+    customerId: row.customer_id || null,
+    status: row.status || "pending",
     items: items.map((it) => ({
       id: it.product_id,
       qty: it.qty,
@@ -772,6 +775,40 @@ const T = {
   login: { ar: "دخول", en: "Login", fr: "Connexion" },
   backToStore: { ar: "الرجوع للمتجر", en: "Back to Store", fr: "Retour à la Boutique" },
   logout: { ar: "خروج", en: "Log Out", fr: "Déconnexion" },
+  myAccount: { ar: "حسابي", en: "My Account", fr: "Mon Compte" },
+  customerLoginTitle: { ar: "دخول الزبائن", en: "Customer Login", fr: "Connexion Client" },
+  customerSignupTitle: { ar: "إنشاء حساب جديد", en: "Create Account", fr: "Créer un Compte" },
+  switchToSignup: { ar: "ليس لديك حساب؟ سجّل الآن", en: "Don't have an account? Sign up", fr: "Pas de compte ? Inscrivez-vous" },
+  switchToLogin: { ar: "لديك حساب؟ سجّل الدخول", en: "Already have an account? Log in", fr: "Déjà un compte ? Connectez-vous" },
+  signupBtn: { ar: "إنشاء الحساب", en: "Sign Up", fr: "S'inscrire" },
+  authError: {
+    ar: "تعذر تسجيل الدخول، تحقق من البيانات وحاول مجددًا",
+    en: "Login failed, check your details and try again",
+    fr: "Échec de connexion, vérifiez vos informations et réessayez",
+  },
+  signupError: {
+    ar: "تعذر إنشاء الحساب، قد يكون البريد مستخدمًا مسبقًا",
+    en: "Sign-up failed, this email may already be registered",
+    fr: "Échec de l'inscription, cet e-mail est peut-être déjà utilisé",
+  },
+  myOrdersTitle: { ar: "طلباتي", en: "My Orders", fr: "Mes Commandes" },
+  noOrdersYet: { ar: "لا توجد طلبات بعد", en: "No orders yet", fr: "Aucune commande pour le moment" },
+  loginRequiredNote: {
+    ar: "يلزم تسجيل الدخول لإتمام الشراء",
+    en: "You need to log in to complete your purchase",
+    fr: "Vous devez vous connecter pour finaliser votre achat",
+  },
+  loginToCheckout: { ar: "تسجيل الدخول للمتابعة", en: "Login to Continue", fr: "Connexion pour Continuer" },
+  orderStatusLabel: { ar: "حالة الطلب", en: "Order Status", fr: "Statut de la Commande" },
+  statusPending: { ar: "قيد الانتظار", en: "Pending", fr: "En attente" },
+  statusProcessing: { ar: "قيد المعالجة", en: "Processing", fr: "En traitement" },
+  statusShipped: { ar: "تم الشحن", en: "Shipped", fr: "Expédiée" },
+  statusDelivered: { ar: "تم التسليم", en: "Delivered", fr: "Livrée" },
+  statusCancelled: { ar: "ملغي", en: "Cancelled", fr: "Annulée" },
+  tabCustomers: { ar: "الزبائن", en: "Customers", fr: "Clients" },
+  noCustomersYet: { ar: "لا يوجد زبائن مسجلين بعد", en: "No registered customers yet", fr: "Aucun client enregistré pour le moment" },
+  customerOrdersCount: { ar: "عدد الطلبات", en: "Orders", fr: "Commandes" },
+  customerTotalSpend: { ar: "إجمالي الإنفاق", en: "Total Spent", fr: "Total Dépensé" },
   tabAddProduct: { ar: "إضافة صنف", en: "Add Product", fr: "Ajouter un Produit" },
   tabManageProducts: { ar: "إدارة المنتجات", en: "Manage Products", fr: "Gérer les Produits" },
   tabReports: { ar: "تقارير المبيعات", en: "Sales Reports", fr: "Rapports de Ventes" },
@@ -2389,6 +2426,43 @@ function AdminInvoiceRecipients({ lang, invoiceRecipients, setInvoiceRecipients 
   );
 }
 
+function AdminCustomers({ lang, customers, orders, fmtPrice }) {
+  const orderTotal = (order) =>
+    order.items.reduce((sum, it) => sum + (Number(it.price) || 0) * it.qty, 0);
+
+  const statsFor = (customerId) => {
+    const own = orders.filter((o) => o.customerId === customerId);
+    return { count: own.length, spend: own.reduce((s, o) => s + orderTotal(o), 0) };
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      {customers.length === 0 ? (
+        <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noCustomersYet[lang]}</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {customers.map((c) => {
+            const { count, spend } = statsFor(c.id);
+            return (
+              <div
+                key={c.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3 rounded-sm"
+                style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+              >
+                <span className="text-sm flex-1 min-w-[140px]" style={{ color: THEME.ivory }}>{c.name || "—"}</span>
+                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{c.email}</span>
+                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{c.phone}</span>
+                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.customerOrdersCount[lang]}: {count}</span>
+                <span className="text-xs" style={{ color: THEME.goldSoft }}>{T.customerTotalSpend[lang]}: {fmtPrice(spend)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminExchangeRates({ lang, rates, setRates }) {
   const [draft, setDraft] = useState({ XAF: String(rates.XAF), XOF: String(rates.XOF) });
   const [msg, setMsg] = useState("");
@@ -3054,9 +3128,12 @@ function AdminInventory({ lang, products, rates }) {
   );
 }
 
-function AdminSales({ lang, orders, products, fmtPrice }) {
+const ORDER_STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled"];
+
+function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
   const [filterCountry, setFilterCountry] = useState("all");
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [statusErrorId, setStatusErrorId] = useState(null);
 
   const rows = orders
     .filter((o) => filterCountry === "all" || o.country === filterCountry)
@@ -3148,6 +3225,27 @@ function AdminSales({ lang, orders, products, fmtPrice }) {
                     </div>
                   );
                 })}
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.orderStatusLabel[lang]}</span>
+                <select
+                  value={order.status || "pending"}
+                  onChange={async (e) => {
+                    const ok = await onStatusChange(order.id, e.target.value);
+                    setStatusErrorId(ok ? null : order.id);
+                  }}
+                  className="text-xs px-2 py-1.5 rounded-sm"
+                  style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                >
+                  {ORDER_STATUSES.map((s) => (
+                    <option key={s} value={s} style={{ background: THEME.surface }}>
+                      {T[`status${s.charAt(0).toUpperCase()}${s.slice(1)}`][lang]}
+                    </option>
+                  ))}
+                </select>
+                {statusErrorId === order.id && (
+                  <span className="text-xs" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</span>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <button
@@ -3554,6 +3652,186 @@ function CustomDesignModal({ lang, isRTL, displayFont, metalGramPrices, fmtPrice
   );
 }
 
+const ORDER_STATUS_LABEL_KEYS = {
+  pending: "statusPending",
+  processing: "statusProcessing",
+  shipped: "statusShipped",
+  delivered: "statusDelivered",
+  cancelled: "statusCancelled",
+};
+
+function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClose, onAuthed }) {
+  const [view, setView] = useState(session ? "orders" : "login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (session) setView("orders");
+  }, [session]);
+
+  const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+  const myOrders = session ? orders.filter((o) => o.customerId === session.user.id).slice().reverse() : [];
+
+  const orderTotal = (order) =>
+    order.items.reduce((sum, it) => {
+      const product = products.find((p) => p.id === it.id);
+      const price = it.price != null ? it.price : product ? product.price : 0;
+      return sum + price * it.qty;
+    }, 0);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setLoading(false);
+    if (err) { setError(true); return; }
+    setPassword("");
+  };
+
+  const handleSignup = async () => {
+    setLoading(true);
+    const { data, error: signUpErr } = await supabase.auth.signUp({ email: email.trim(), password });
+    if (signUpErr || !data.user) {
+      setLoading(false);
+      setError(true);
+      return;
+    }
+    const profile = { id: data.user.id, name: name.trim(), email: email.trim(), phone: phone.trim() };
+    const { error: profileErr } = await supabase.from("customers").insert(profile);
+    if (!profileErr) {
+      await supabase.rpc("link_past_orders_by_phone", { p_phone: profile.phone });
+    }
+    setLoading(false);
+    if (profileErr) { setError(true); return; }
+    onAuthed(profile);
+    setPassword("");
+  };
+
+  const signupDisabled = loading || !email.trim() || !password || !name.trim() || !phone.trim();
+  const loginDisabled = loading || !email.trim() || !password;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={onClose}>
+      <div className="dr-card dr-modal rounded-sm max-w-xs w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end mb-1">
+          <button onClick={onClose} aria-label={T.close[lang]}><X size={18} color={THEME.ivoryDim} /></button>
+        </div>
+
+        {!session ? (
+          <div className="text-center">
+            <Lock size={26} color={THEME.gold} className="mx-auto mb-3" />
+            <p className="text-sm mb-4" style={{ color: THEME.ivory }}>
+              {view === "signup" ? T.customerSignupTitle[lang] : T.customerLoginTitle[lang]}
+            </p>
+            {view === "signup" && (
+              <>
+                <input
+                  type="text"
+                  placeholder={T.customerNamePlaceholder[lang]}
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setError(false); }}
+                  className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                  style={inputStyle}
+                />
+                <input
+                  type="tel"
+                  placeholder={T.customerPhonePlaceholder[lang]}
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value); setError(false); }}
+                  className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                  style={inputStyle}
+                />
+              </>
+            )}
+            <input
+              type="email"
+              autoComplete="username"
+              placeholder={T.loginEmail[lang]}
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(false); }}
+              className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+              style={inputStyle}
+            />
+            <input
+              type="password"
+              autoComplete={view === "signup" ? "new-password" : "current-password"}
+              placeholder={T.loginPassword[lang]}
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(false); }}
+              className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+              style={inputStyle}
+            />
+            {error && (
+              <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>
+                {view === "signup" ? T.signupError[lang] : T.authError[lang]}
+              </p>
+            )}
+            <button
+              onClick={view === "signup" ? handleSignup : handleLogin}
+              disabled={view === "signup" ? signupDisabled : loginDisabled}
+              className="w-full py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+              style={{ opacity: (view === "signup" ? signupDisabled : loginDisabled) ? 0.6 : 1 }}
+            >
+              {view === "signup" ? T.signupBtn[lang] : T.login[lang]}
+            </button>
+            <button
+              onClick={() => { setView(view === "signup" ? "login" : "signup"); setError(false); }}
+              className="w-full text-xs mt-4 underline"
+              style={{ color: THEME.ivoryDim, background: "none" }}
+            >
+              {view === "signup" ? T.switchToLogin[lang] : T.switchToSignup[lang]}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm mb-4 text-center" style={{ color: THEME.ivory }}>{T.myOrdersTitle[lang]}</p>
+            {myOrders.length === 0 ? (
+              <p className="text-sm text-center mb-4" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
+            ) : (
+              <div className="flex flex-col gap-3 mb-4">
+                {myOrders.map((order) => (
+                  <div key={order.id} className="p-3 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</span>
+                      <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.date}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 mb-2">
+                      {order.items.map((it, idx) => {
+                        const product = products.find((p) => p.id === it.id);
+                        return (
+                          <p key={idx} className="text-xs" style={{ color: THEME.ivory }}>
+                            {product ? product.name[lang] : it.id} × {it.qty}
+                          </p>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] px-2 py-1 rounded-sm" style={{ background: THEME.bgSoft, color: THEME.goldSoft }}>
+                        {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
+                      </span>
+                      <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => { supabase.auth.signOut(); onClose(); }}
+              className="w-full py-2 rounded-sm text-xs tracking-widest uppercase border"
+              style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+            >
+              {T.logout[lang]}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function JewelryStore() {
   const [lang, setLang] = useState("ar");
   const [currency, setCurrency] = useState("USD");
@@ -3568,6 +3846,8 @@ export default function JewelryStore() {
   const [lightbox, setLightbox] = useState(null);
   const [announceIndex, setAnnounceIndex] = useState(0);
   const [customDesignOpen, setCustomDesignOpen] = useState(false);
+  const [customerAuthOpen, setCustomerAuthOpen] = useState(false);
+  const [customerProfile, setCustomerProfile] = useState(null);
   const mostViewedScrollRef = useRef(null);
 
   useEffect(() => {
@@ -3581,6 +3861,7 @@ export default function JewelryStore() {
   const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
   const [heroTitle, setHeroTitle] = useState({ ar: T.heroTitle.ar, en: T.heroTitle.en, fr: T.heroTitle.fr });
   const [invoiceRecipients, setInvoiceRecipients] = useState([]);
+  const [customers, setCustomers] = useState([]);
   // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
   // أي تعديل على سعر الجرام ينعكس فورًا على كل مكان بالموقع بيستخدم products.price، بدون لمس كل صنف يدويًا
   const products = useMemo(
@@ -3627,10 +3908,59 @@ export default function JewelryStore() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // إعادة تحميل بيانات المنتجات الكاملة (تكلفة/أصناف مخفية) بعد تسجيل دخول المشرف —
-  // التحميل الأولي (قبل الدخول) يجيب نسخة عامة مقيّدة الأعمدة فقط عبر عرض "products_public"
+  // تحميل بروفايل الزبون (اسم/هاتف) لتعبئة نموذج الشراء تلقائيًا — فقط على دومين المتجر العام،
+  // ما إلها علاقة بجلسات لوحة الإدارة
   useEffect(() => {
-    if (!currentAdminEmail) return;
+    if (IS_ADMIN_DOMAIN || !session) {
+      setCustomerProfile(null);
+      return;
+    }
+    supabase
+      .from("customers")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setCustomerProfile(data);
+      });
+  }, [session]);
+
+  // تعبئة حقلي الاسم/الهاتف بنموذج الشراء تلقائيًا من بروفايل الزبون (تبقى قابلة للتعديل يدويًا)
+  useEffect(() => {
+    if (!customerProfile) return;
+    setCustomerName(customerProfile.name || "");
+    setCustomerPhone(customerProfile.phone || "");
+  }, [customerProfile]);
+
+  // إعادة تحميل الطلبات فور تسجيل الدخول/إنشاء الحساب — التحميل الأولي (قبل الدخول) ما بيشمل
+  // أي طلبات (RLS)، فلازم نجيبها من جديد هلق حتى تظهر بقسم "طلباتي" فورًا، بما فيها الطلبات
+  // القديمة اللي انربطت تلقائيًا برقم الهاتف عند التسجيل
+  useEffect(() => {
+    if (IS_ADMIN_DOMAIN) return;
+    if (!session) {
+      setOrders([]);
+      return;
+    }
+    Promise.all([
+      supabase.from("orders").select("*").order("created_at"),
+      supabase.from("order_items").select("*"),
+    ]).then(([ordersRes, itemsRes]) => {
+      if (ordersRes.data && itemsRes.data) {
+        const itemsByOrder = {};
+        itemsRes.data.forEach((it) => {
+          if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+          itemsByOrder[it.order_id].push(it);
+        });
+        setOrders(ordersRes.data.map((row) => orderRowToApp(row, itemsByOrder[row.id] || [])));
+      }
+    });
+  }, [session]);
+
+  // إعادة تحميل بيانات المنتجات الكاملة (تكلفة/أصناف مخفية) بعد تسجيل دخول المشرف —
+  // التحميل الأولي (قبل الدخول) يجيب نسخة عامة مقيّدة الأعمدة فقط عبر عرض "products_public".
+  // محصور بدومين الإدارة فقط: بعد إضافة حسابات الزبائن، أي جلسة "authenticated" ما عادت تعني مشرف تلقائيًا
+  useEffect(() => {
+    if (!IS_ADMIN_DOMAIN || !currentAdminEmail) return;
     supabase
       .from("products")
       .select("*")
@@ -3679,6 +4009,21 @@ export default function JewelryStore() {
       });
   }, [currentAdminEmail]);
 
+  // قائمة الزبائن المسجّلين (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله، مش جزء من التحميل العام
+  useEffect(() => {
+    if (!currentAdminEmail) {
+      setCustomers([]);
+      return;
+    }
+    supabase
+      .from("customers")
+      .select("*")
+      .order("created_at")
+      .then(({ data }) => {
+        if (data) setCustomers(data);
+      });
+  }, [currentAdminEmail]);
+
   // ينقل التبويب الحالي لأول قسم مسموح فيه إذا كان المشرف مش صاحب صلاحية على التبويب الحالي
   useEffect(() => {
     if (!permissionsLoaded) return;
@@ -3691,9 +4036,10 @@ export default function JewelryStore() {
   useEffect(() => {
     const loadData = async () => {
       // نتحقق إذا في جلسة مشرف فعّالة أصلًا قبل ما نقرر أي مصدر منتجات نستخدم — لتفادي حالة
-      // سباق (race) بين هالتحميل وتحميل بيانات المشرف الكامل (بالأسفل) لو الاثنين صاروا بنفس اللحظة
+      // سباق (race) بين هالتحميل وتحميل بيانات المشرف الكامل (بالأسفل) لو الاثنين صاروا بنفس اللحظة.
+      // محصور بدومين الإدارة: جلسة زبون على المتجر العام ما لازم توصّل أبدًا لعمود cost بجدول المنتجات
       const { data: sessionData } = await supabase.auth.getSession();
-      const productsTable = sessionData?.session ? "products" : "products_public";
+      const productsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "products" : "products_public";
       const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
         supabase.from(productsTable).select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
@@ -3925,6 +4271,7 @@ export default function JewelryStore() {
               { id: "categories", label: T.tabCategories[lang], Icon: Tag },
               { id: "content", label: T.tabSiteContent[lang], Icon: Type },
               { id: "invoices", label: T.tabInvoiceRecipients[lang], Icon: Mail },
+              { id: "customers", label: T.tabCustomers[lang], Icon: Contact },
             ]
               .filter((t) => myPermissions.includes(t.id))
               .concat(isSuperAdmin ? [{ id: "admins", label: T.tabAdmins[lang], Icon: Shield }] : [])
@@ -3991,7 +4338,18 @@ export default function JewelryStore() {
             />
           )}
           {adminTab === "sales" && (
-            <AdminSales lang={lang} orders={orders} products={products} fmtPrice={fmtPrice} />
+            <AdminSales
+              lang={lang}
+              orders={orders}
+              products={products}
+              fmtPrice={fmtPrice}
+              onStatusChange={async (orderId, status) => {
+                const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+                if (error) return false;
+                setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
+                return true;
+              }}
+            />
           )}
           {adminTab === "reports" && (
             <AdminReports lang={lang} orders={orders} products={products} fmtPrice={fmtPrice} />
@@ -4019,6 +4377,9 @@ export default function JewelryStore() {
           )}
           {adminTab === "invoices" && (
             <AdminInvoiceRecipients lang={lang} invoiceRecipients={invoiceRecipients} setInvoiceRecipients={setInvoiceRecipients} />
+          )}
+          {adminTab === "customers" && (
+            <AdminCustomers lang={lang} customers={customers} orders={orders} fmtPrice={fmtPrice} />
           )}
           {adminTab === "admins" && isSuperAdmin && <AdminUsers lang={lang} />}
           </div>
@@ -4134,6 +4495,9 @@ export default function JewelryStore() {
             >
               {CURRENCIES.map((c) => <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.id}</option>)}
             </select>
+            <button onClick={() => setCustomerAuthOpen(true)} aria-label={session ? T.myAccount[lang] : T.customerLoginTitle[lang]}>
+              <Users size={22} color={THEME.goldSoft} />
+            </button>
             <button onClick={() => setCartOpen(true)} className="relative">
               <ShoppingBag size={22} color={THEME.goldSoft} />
               {cartCount > 0 && (
@@ -4480,6 +4844,18 @@ export default function JewelryStore() {
         />
       )}
 
+      {customerAuthOpen && (
+        <CustomerAccountModal
+          lang={lang}
+          session={session}
+          orders={orders}
+          products={products}
+          fmtPrice={fmtPrice}
+          onClose={() => setCustomerAuthOpen(false)}
+          onAuthed={(profile) => setCustomerProfile(profile)}
+        />
+      )}
+
       {/* Cart drawer */}
       {cartOpen && (
         <div className="fixed inset-0 z-50" onClick={() => setCartOpen(false)} style={{ background: "rgba(28,28,28,0.5)" }}>
@@ -4573,7 +4949,19 @@ export default function JewelryStore() {
                 </>
               )}
 
-              {cart.length > 0 && !orderPlaced && (
+              {cart.length > 0 && !orderPlaced && !session && (
+                <div className="mt-4 text-center">
+                  <p className="text-sm mb-4" style={{ color: THEME.ivoryDim }}>{T.loginRequiredNote[lang]}</p>
+                  <button
+                    onClick={() => setCustomerAuthOpen(true)}
+                    className="px-6 py-2 rounded-sm text-xs tracking-widest uppercase dr-btn-gold"
+                  >
+                    {T.loginToCheckout[lang]}
+                  </button>
+                </div>
+              )}
+
+              {cart.length > 0 && !orderPlaced && session && (
                 <div className="mt-2">
                   <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</p>
                   <input
@@ -4667,6 +5055,10 @@ export default function JewelryStore() {
                 <button
                   onClick={async () => {
                     if (selectedCart.length === 0) return;
+                    if (!session) {
+                      setCustomerAuthOpen(true);
+                      return;
+                    }
                     if (!customerName.trim() || !customerPhone.trim()) {
                       setCustomerInfoError(true);
                       return;
@@ -4695,6 +5087,8 @@ export default function JewelryStore() {
                       payment,
                       customerName: customerName.trim(),
                       customerPhone: customerPhone.trim(),
+                      customerId: session.user.id,
+                      status: "pending",
                       items: selectedCart.map((i) => {
                         const live = liveProduct(i);
                         return { id: i.id, qty: i.qty, size: i.size, price: live.price, cost: live.cost || 0, rep: i.rep || "" };
@@ -4741,7 +5135,7 @@ export default function JewelryStore() {
                   className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
                   style={selectedCart.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                 >
-                  {T.checkout[lang]}
+                  {session ? T.checkout[lang] : T.loginToCheckout[lang]}
                 </button>
                 <p className="text-[11px] text-center mt-3" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>{T.checkoutNote[lang]}</p>
               </div>
