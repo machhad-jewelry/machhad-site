@@ -776,6 +776,8 @@ const T = {
   backToStore: { ar: "الرجوع للمتجر", en: "Back to Store", fr: "Retour à la Boutique" },
   logout: { ar: "خروج", en: "Log Out", fr: "Déconnexion" },
   myAccount: { ar: "حسابي", en: "My Account", fr: "Mon Compte" },
+  logoutAccount: { ar: "خروج من الحساب", en: "Log Out of Account", fr: "Se déconnecter du compte" },
+  backBtn: { ar: "رجوع", en: "Back", fr: "Retour" },
   customerLoginTitle: { ar: "دخول الزبائن", en: "Customer Login", fr: "Connexion Client" },
   customerSignupTitle: { ar: "إنشاء حساب جديد", en: "Create Account", fr: "Créer un Compte" },
   switchToSignup: { ar: "ليس لديك حساب؟ سجّل الآن", en: "Don't have an account? Sign up", fr: "Pas de compte ? Inscrivez-vous" },
@@ -3835,13 +3837,22 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
                 ))}
               </div>
             )}
-            <button
-              onClick={() => { supabase.auth.signOut(); onClose(); }}
-              className="w-full py-2 rounded-sm text-xs tracking-widest uppercase border"
-              style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-            >
-              {T.logout[lang]}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 rounded-sm text-xs tracking-widest uppercase border"
+                style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+              >
+                {T.backBtn[lang]}
+              </button>
+              <button
+                onClick={() => { supabase.auth.signOut(); onClose(); }}
+                className="flex-1 py-2 rounded-sm text-xs tracking-widest uppercase border"
+                style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+              >
+                {T.logoutAccount[lang]}
+              </button>
+            </div>
           </div>
         )}
       </div>
