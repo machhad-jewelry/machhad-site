@@ -3668,6 +3668,16 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
   const [phone, setPhone] = useState("");
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+
+  const countryLabel = (id) => {
+    const c = COUNTRIES.find((c) => c.id === id);
+    return c ? c[lang] : id;
+  };
+  const paymentLabel = (id) => {
+    const m = PAYMENT_METHODS.find((m) => m.id === id);
+    return m ? m[lang] : id;
+  };
 
   useEffect(() => {
     if (session) setView("orders");
@@ -3808,12 +3818,19 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
                         );
                       })}
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <span className="text-[11px] px-2 py-1 rounded-sm" style={{ background: THEME.bgSoft, color: THEME.goldSoft }}>
                         {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
                       </span>
                       <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</span>
                     </div>
+                    <button
+                      onClick={() => setInvoiceOrder(order)}
+                      className="w-full text-xs px-3 py-1.5 rounded-sm border"
+                      style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                    >
+                      {T.viewInvoice[lang]}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -3828,6 +3845,77 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
           </div>
         )}
       </div>
+
+      {invoiceOrder && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={() => setInvoiceOrder(null)}>
+          <div className="dr-card dr-modal rounded-sm max-w-md w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="dr-no-print flex justify-end mb-2">
+              <button onClick={() => setInvoiceOrder(null)}><X size={18} color={THEME.ivoryDim} /></button>
+            </div>
+
+            <div className="dr-print-target">
+              <div className="text-center mb-5">
+                <p style={{ fontFamily: "'Cormorant Garamond', serif", color: THEME.goldSoft, fontSize: "1.3rem" }}>
+                  {T.brand[lang]} — {T.invoiceTitle[lang]}
+                </p>
+                <p className="text-xs mt-1" style={{ color: THEME.ivoryDim }}>
+                  {T.colOrderId[lang]}: {invoiceOrder.id.replace("S-", "")} · {invoiceOrder.date}
+                </p>
+                {invoiceOrder.customerName && (
+                  <p className="text-sm mt-2" style={{ color: THEME.ivory }}>
+                    {T.customerName[lang]}: {invoiceOrder.customerName}
+                  </p>
+                )}
+                {invoiceOrder.customerPhone && (
+                  <p className="text-xs mt-0.5" style={{ color: THEME.ivoryDim }}>
+                    {T.customerPhone[lang]}: {invoiceOrder.customerPhone}
+                  </p>
+                )}
+                <p className="text-xs mt-1" style={{ color: THEME.ivoryDim }}>
+                  {countryLabel(invoiceOrder.country)}
+                  {invoiceOrder.payment ? ` · ${paymentLabel(invoiceOrder.payment)}` : ""}
+                </p>
+                <p className="text-xs mt-1" style={{ color: THEME.goldSoft }}>
+                  {T.orderStatusLabel[lang]}: {T[ORDER_STATUS_LABEL_KEYS[invoiceOrder.status] || "statusPending"][lang]}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 mb-4">
+                {invoiceOrder.items.map((it, idx) => {
+                  const product = products.find((p) => p.id === it.id);
+                  const unitPrice = it.price != null ? it.price : product ? product.price : 0;
+                  return (
+                    <div key={idx} className="flex items-center gap-3" style={{ borderBottom: `1px solid ${THEME.surfaceLine}`, paddingBottom: 8 }}>
+                      <div className="w-12 h-12 flex-shrink-0">
+                        {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate" style={{ color: THEME.ivory }}>{product ? product.name[lang] : it.id}</p>
+                        <p className="text-xs" style={{ color: THEME.ivoryDim }}>
+                          {it.size ? `${it.size} · ` : ""}{T.colQty[lang]}: {it.qty} · {T.unitPrice[lang]}: {fmtPrice(unitPrice)}
+                        </p>
+                      </div>
+                      <span className="text-sm" style={{ color: THEME.ivory }}>{fmtPrice(unitPrice * it.qty)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${THEME.surfaceLine}` }}>
+                <span className="text-sm" style={{ color: THEME.ivory }}>{T.lineTotal[lang]}</span>
+                <span className="text-sm" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(invoiceOrder))}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="dr-no-print w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+            >
+              {T.printInvoice[lang]}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
