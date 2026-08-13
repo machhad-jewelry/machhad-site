@@ -3797,80 +3797,106 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
   const loginDisabled = loading || !email.trim() || !password;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={onClose}>
-      <div className="dr-card dr-modal rounded-sm max-w-xs w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-end mb-1">
-          <button onClick={onClose} aria-label={T.close[lang]}><X size={18} color={THEME.ivoryDim} /></button>
-        </div>
-
-        {!session ? (
-          <div className="text-center">
-            <Lock size={26} color={THEME.gold} className="mx-auto mb-3" />
-            <p className="text-sm mb-4" style={{ color: THEME.ivory }}>
-              {view === "signup" ? T.customerSignupTitle[lang] : T.customerLoginTitle[lang]}
-            </p>
-            {view === "signup" && (
-              <>
-                <input
-                  type="text"
-                  placeholder={T.customerNamePlaceholder[lang]}
-                  value={name}
-                  onChange={(e) => { setName(e.target.value); setError(false); }}
-                  className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
-                  style={inputStyle}
-                />
-                <input
-                  type="tel"
-                  placeholder={T.customerPhonePlaceholder[lang]}
-                  value={phone}
-                  onChange={(e) => { setPhone(e.target.value); setError(false); }}
-                  className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
-                  style={inputStyle}
-                />
-              </>
-            )}
-            <input
-              type="email"
-              autoComplete="username"
-              placeholder={T.loginEmail[lang]}
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(false); }}
-              className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
-              style={inputStyle}
-            />
-            <input
-              type="password"
-              autoComplete={view === "signup" ? "new-password" : "current-password"}
-              placeholder={T.loginPassword[lang]}
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(false); }}
-              className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
-              style={inputStyle}
-            />
-            {error && (
-              <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>
-                {view === "signup" ? T.signupError[lang] : T.authError[lang]}
+    <>
+      {!session ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={onClose}>
+          <div className="dr-card dr-modal rounded-sm max-w-xs w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end mb-1">
+              <button onClick={onClose} aria-label={T.close[lang]}><X size={18} color={THEME.ivoryDim} /></button>
+            </div>
+            <div className="text-center">
+              <Lock size={26} color={THEME.gold} className="mx-auto mb-3" />
+              <p className="text-sm mb-4" style={{ color: THEME.ivory }}>
+                {view === "signup" ? T.customerSignupTitle[lang] : T.customerLoginTitle[lang]}
               </p>
-            )}
+              {view === "signup" && (
+                <>
+                  <input
+                    type="text"
+                    placeholder={T.customerNamePlaceholder[lang]}
+                    value={name}
+                    onChange={(e) => { setName(e.target.value); setError(false); }}
+                    className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                    style={inputStyle}
+                  />
+                  <input
+                    type="tel"
+                    placeholder={T.customerPhonePlaceholder[lang]}
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); setError(false); }}
+                    className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                    style={inputStyle}
+                  />
+                </>
+              )}
+              <input
+                type="email"
+                autoComplete="username"
+                placeholder={T.loginEmail[lang]}
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(false); }}
+                className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                style={inputStyle}
+              />
+              <input
+                type="password"
+                autoComplete={view === "signup" ? "new-password" : "current-password"}
+                placeholder={T.loginPassword[lang]}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                className="w-full text-center px-3 py-2 rounded-sm text-sm mb-3"
+                style={inputStyle}
+              />
+              {error && (
+                <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>
+                  {view === "signup" ? T.signupError[lang] : T.authError[lang]}
+                </p>
+              )}
+              <button
+                onClick={view === "signup" ? handleSignup : handleLogin}
+                disabled={view === "signup" ? signupDisabled : loginDisabled}
+                className="w-full py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
+                style={{ opacity: (view === "signup" ? signupDisabled : loginDisabled) ? 0.6 : 1 }}
+              >
+                {view === "signup" ? T.signupBtn[lang] : T.login[lang]}
+              </button>
+              <button
+                onClick={() => { setView(view === "signup" ? "login" : "signup"); setError(false); }}
+                className="w-full text-xs mt-4 underline"
+                style={{ color: THEME.ivoryDim, background: "none" }}
+              >
+                {view === "signup" ? T.switchToLogin[lang] : T.switchToSignup[lang]}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: THEME.bg }}>
+          <div
+            className="sticky top-0 z-10 flex items-center justify-between gap-2 px-5 sm:px-10 py-4 border-b"
+            style={{ background: THEME.bg, borderColor: THEME.surfaceLine }}
+          >
             <button
-              onClick={view === "signup" ? handleSignup : handleLogin}
-              disabled={view === "signup" ? signupDisabled : loginDisabled}
-              className="w-full py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
-              style={{ opacity: (view === "signup" ? signupDisabled : loginDisabled) ? 0.6 : 1 }}
+              onClick={onClose}
+              className="text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-sm border tracking-widest uppercase whitespace-nowrap"
+              style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
             >
-              {view === "signup" ? T.signupBtn[lang] : T.login[lang]}
+              {T.backBtn[lang]}
             </button>
+            <span style={{ fontFamily: "'Cormorant Garamond', serif", color: THEME.goldSoft, fontSize: "1.2rem" }}>
+              {T.myOrdersTitle[lang]}
+            </span>
             <button
-              onClick={() => { setView(view === "signup" ? "login" : "signup"); setError(false); }}
-              className="w-full text-xs mt-4 underline"
-              style={{ color: THEME.ivoryDim, background: "none" }}
+              onClick={() => { supabase.auth.signOut(); onClose(); }}
+              className="text-[11px] sm:text-xs px-3 sm:px-4 py-2 rounded-sm border tracking-widest uppercase whitespace-nowrap"
+              style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
             >
-              {view === "signup" ? T.switchToLogin[lang] : T.switchToSignup[lang]}
+              {T.logoutAccount[lang]}
             </button>
           </div>
-        ) : (
-          <div>
-            <div className="flex flex-col items-center mb-5">
+
+          <div className="max-w-3xl mx-auto px-5 sm:px-10 py-8">
+            <div className="flex flex-col items-center mb-8">
               <button
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={avatarLoading}
@@ -3903,17 +3929,17 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                 <p className="text-xs mt-1" style={{ color: "#E07A7A" }}>{T.photoUploadFailed[lang]}</p>
               )}
             </div>
-            <p className="text-sm mb-4 text-center" style={{ color: THEME.ivory }}>{T.myOrdersTitle[lang]}</p>
+
             {myOrders.length === 0 ? (
-              <p className="text-sm text-center mb-4" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
+              <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
-              <div className="flex flex-col gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {myOrders.map((order) => {
                   const statusColor = orderStatusColor(order.status);
                   return (
                   <div
                     key={order.id}
-                    className="p-3 rounded-sm"
+                    className="p-4 rounded-sm"
                     style={{
                       background: THEME.surface,
                       border: `1px solid ${THEME.surfaceLine}`,
@@ -3924,7 +3950,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                       <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</span>
                       <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.date}</span>
                     </div>
-                    <div className="flex flex-col gap-2 mb-2">
+                    <div className="flex flex-col gap-2 mb-3">
                       {order.items.map((it, idx) => {
                         const product = products.find((p) => p.id === it.id);
                         return (
@@ -3939,7 +3965,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                         );
                       })}
                     </div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <span
                         className="text-[11px] px-2 py-1 rounded-sm flex items-center gap-1.5 w-fit"
                         style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
@@ -3961,25 +3987,9 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                 })}
               </div>
             )}
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2 rounded-sm text-xs tracking-widest uppercase border"
-                style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-              >
-                {T.backBtn[lang]}
-              </button>
-              <button
-                onClick={() => { supabase.auth.signOut(); onClose(); }}
-                className="flex-1 py-2 rounded-sm text-xs tracking-widest uppercase border"
-                style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-              >
-                {T.logoutAccount[lang]}
-              </button>
-            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {invoiceOrder && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={() => setInvoiceOrder(null)}>
@@ -4051,7 +4061,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
