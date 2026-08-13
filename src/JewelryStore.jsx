@@ -3132,6 +3132,20 @@ function AdminInventory({ lang, products, rates }) {
 
 const ORDER_STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled"];
 
+function orderStatusColor(status) {
+  switch (status) {
+    case "processing":
+    case "shipped":
+      return THEME.goldSoft;
+    case "delivered":
+      return THEME.gold;
+    case "cancelled":
+      return THEME.garnet;
+    default:
+      return THEME.ivoryDim;
+  }
+}
+
 function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
   const [filterCountry, setFilterCountry] = useState("all");
   const [invoiceOrder, setInvoiceOrder] = useState(null);
@@ -3197,7 +3211,11 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
             <div
               key={order.id}
               className="p-4 rounded-sm"
-              style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+              style={{
+                background: THEME.surface,
+                border: `1px solid ${THEME.surfaceLine}`,
+                borderInlineStart: `3px solid ${orderStatusColor(order.status)}`,
+              }}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.colOrderId[lang]}: {order.id.replace("S-", "")}</span>
@@ -3237,7 +3255,7 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
                     setStatusErrorId(ok ? null : order.id);
                   }}
                   className="text-xs px-2 py-1.5 rounded-sm"
-                  style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                  style={{ background: THEME.bgSoft, border: `1px solid ${orderStatusColor(order.status)}`, color: orderStatusColor(order.status) }}
                 >
                   {ORDER_STATUSES.map((s) => (
                     <option key={s} value={s} style={{ background: THEME.surface }}>
@@ -3804,24 +3822,43 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
               <p className="text-sm text-center mb-4" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
               <div className="flex flex-col gap-3 mb-4">
-                {myOrders.map((order) => (
-                  <div key={order.id} className="p-3 rounded-sm" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
+                {myOrders.map((order) => {
+                  const statusColor = orderStatusColor(order.status);
+                  return (
+                  <div
+                    key={order.id}
+                    className="p-3 rounded-sm"
+                    style={{
+                      background: THEME.surface,
+                      border: `1px solid ${THEME.surfaceLine}`,
+                      borderInlineStart: `3px solid ${statusColor}`,
+                    }}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</span>
                       <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.date}</span>
                     </div>
-                    <div className="flex flex-col gap-1 mb-2">
+                    <div className="flex flex-col gap-2 mb-2">
                       {order.items.map((it, idx) => {
                         const product = products.find((p) => p.id === it.id);
                         return (
-                          <p key={idx} className="text-xs" style={{ color: THEME.ivory }}>
-                            {product ? product.name[lang] : it.id} × {it.qty}
-                          </p>
+                          <div key={idx} className="flex items-center gap-2">
+                            <div className="w-8 h-8 flex-shrink-0">
+                              {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
+                            </div>
+                            <p className="text-xs" style={{ color: THEME.ivory }}>
+                              {product ? product.name[lang] : it.id} × {it.qty}
+                            </p>
+                          </div>
                         );
                       })}
                     </div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] px-2 py-1 rounded-sm" style={{ background: THEME.bgSoft, color: THEME.goldSoft }}>
+                      <span
+                        className="text-[11px] px-2 py-1 rounded-sm flex items-center gap-1.5 w-fit"
+                        style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
                         {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
                       </span>
                       <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</span>
@@ -3834,7 +3871,8 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
                       {T.viewInvoice[lang]}
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div className="flex gap-2">
