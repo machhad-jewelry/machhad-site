@@ -778,6 +778,12 @@ const T = {
   myAccount: { ar: "حسابي", en: "My Account", fr: "Mon Compte" },
   logoutAccount: { ar: "خروج من الحساب", en: "Log Out of Account", fr: "Se déconnecter du compte" },
   backBtn: { ar: "رجوع", en: "Back", fr: "Retour" },
+  changePhoto: { ar: "تغيير الصورة الشخصية", en: "Change Profile Photo", fr: "Changer la Photo de Profil" },
+  photoUploadFailed: {
+    ar: "تعذر رفع الصورة، جرّب صورة أصغر",
+    en: "Couldn't upload the photo, try a smaller image",
+    fr: "Échec du téléchargement de la photo, essayez une image plus petite",
+  },
   customerLoginTitle: { ar: "دخول الزبائن", en: "Customer Login", fr: "Connexion Client" },
   customerSignupTitle: { ar: "إنشاء حساب جديد", en: "Create Account", fr: "Créer un Compte" },
   switchToSignup: { ar: "ليس لديك حساب؟ سجّل الآن", en: "Don't have an account? Sign up", fr: "Pas de compte ? Inscrivez-vous" },
@@ -3680,7 +3686,30 @@ const ORDER_STATUS_LABEL_KEYS = {
   cancelled: "statusCancelled",
 };
 
-function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClose, onAuthed }) {
+function resizeImageToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function CustomerAccountModal({ lang, session, customerProfile, orders, products, fmtPrice, onClose, onAuthed, onProfileUpdate }) {
   const [view, setView] = useState(session ? "orders" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -3689,6 +3718,30 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    setAvatarLoading(true);
+    setAvatarError(false);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 256);
+      const { error: err } = await supabase
+        .from("customers")
+        .update({ avatar_url: dataUrl })
+        .eq("id", session.user.id);
+      if (err) throw err;
+      onProfileUpdate({ ...customerProfile, avatar_url: dataUrl });
+    } catch {
+      setAvatarError(true);
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
 
   const countryLabel = (id) => {
     const c = COUNTRIES.find((c) => c.id === id);
@@ -3817,6 +3870,39 @@ function CustomerAccountModal({ lang, session, orders, products, fmtPrice, onClo
           </div>
         ) : (
           <div>
+            <div className="flex flex-col items-center mb-5">
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarLoading}
+                className="relative w-16 h-16 rounded-full overflow-hidden flex items-center justify-center"
+                style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, opacity: avatarLoading ? 0.6 : 1 }}
+                aria-label={T.changePhoto[lang]}
+              >
+                {customerProfile?.avatar_url ? (
+                  <img src={customerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Users size={26} color={THEME.ivoryDim} />
+                )}
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarLoading}
+                className="text-[11px] mt-2 underline"
+                style={{ color: THEME.ivoryDim, background: "none" }}
+              >
+                {T.changePhoto[lang]}
+              </button>
+              {avatarError && (
+                <p className="text-xs mt-1" style={{ color: "#E07A7A" }}>{T.photoUploadFailed[lang]}</p>
+              )}
+            </div>
             <p className="text-sm mb-4 text-center" style={{ color: THEME.ivory }}>{T.myOrdersTitle[lang]}</p>
             {myOrders.length === 0 ? (
               <p className="text-sm text-center mb-4" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
@@ -4633,7 +4719,11 @@ export default function JewelryStore() {
               {CURRENCIES.map((c) => <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.id}</option>)}
             </select>
             <button onClick={() => setCustomerAuthOpen(true)} aria-label={session ? T.myAccount[lang] : T.customerLoginTitle[lang]}>
-              <Users size={22} color={THEME.goldSoft} />
+              {session && customerProfile?.avatar_url ? (
+                <img src={customerProfile.avatar_url} alt="" className="w-[22px] h-[22px] rounded-full object-cover" />
+              ) : (
+                <Users size={22} color={THEME.goldSoft} />
+              )}
             </button>
             <button onClick={() => setCartOpen(true)} className="relative">
               <ShoppingBag size={22} color={THEME.goldSoft} />
@@ -4985,11 +5075,13 @@ export default function JewelryStore() {
         <CustomerAccountModal
           lang={lang}
           session={session}
+          customerProfile={customerProfile}
           orders={orders}
           products={products}
           fmtPrice={fmtPrice}
           onClose={() => setCustomerAuthOpen(false)}
           onAuthed={(profile) => setCustomerProfile(profile)}
+          onProfileUpdate={(profile) => setCustomerProfile(profile)}
         />
       )}
 
