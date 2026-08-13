@@ -1053,6 +1053,13 @@ const COUNTRY_CURRENCY = {
   lebanon: "USD",
 };
 
+// لبنان هو المخزون المركزي (الورشة) وبيقدر يشحن لأي بلد من قائمة COUNTRIES —
+// بعكس مخزون المندوبين المحليين (الكونغو/أبيدجان) اللي محصور فعليًا بالبلد المتوفر فيه فقط
+function productShipsTo(product, countryId) {
+  if (product.countries?.includes("lebanon")) return true;
+  return !!product.countries?.includes(countryId);
+}
+
 
 function Gemstone({ color, size = 56 }) {
   return (
@@ -4423,7 +4430,7 @@ export default function JewelryStore() {
 
   // بلدان الشحن المتوفرة فعليًا لكل القطع المحدَّدة للشراء حاليًا
   const orderCountryOptions = COUNTRIES.filter((c) =>
-    selectedCart.every((i) => liveProduct(i).countries?.includes(c.id))
+    selectedCart.every((i) => productShipsTo(liveProduct(i), c.id))
   );
 
   useEffect(() => {
@@ -5323,7 +5330,7 @@ export default function JewelryStore() {
                     }
                     const outOfCountry = selectedCart.some((i) => {
                       const live = products.find((p) => p.id === i.id) || i;
-                      return !live.countries?.includes(orderCountry);
+                      return !productShipsTo(live, orderCountry);
                     });
                     if (outOfCountry) {
                       setCountryError(true);
