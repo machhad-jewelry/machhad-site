@@ -3895,7 +3895,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
             </button>
           </div>
 
-          <div className="max-w-3xl mx-auto px-5 sm:px-10 py-8">
+          <div className="max-w-5xl mx-auto px-5 sm:px-10 py-8">
             <div className="flex flex-col items-center mb-8">
               <button
                 onClick={() => avatarInputRef.current?.click()}
@@ -3933,58 +3933,69 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
             {myOrders.length === 0 ? (
               <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {myOrders.map((order) => {
-                  const statusColor = orderStatusColor(order.status);
-                  return (
-                  <div
-                    key={order.id}
-                    className="p-4 rounded-sm"
-                    style={{
-                      background: THEME.surface,
-                      border: `1px solid ${THEME.surfaceLine}`,
-                      borderInlineStart: `3px solid ${statusColor}`,
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</span>
-                      <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.date}</span>
-                    </div>
-                    <div className="flex flex-col gap-2 mb-3">
-                      {order.items.map((it, idx) => {
-                        const product = products.find((p) => p.id === it.id);
-                        return (
-                          <div key={idx} className="flex items-center gap-2">
-                            <div className="w-8 h-8 flex-shrink-0">
-                              {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
+              <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
+                <table className="w-full border-collapse" style={{ minWidth: 720 }}>
+                  <thead>
+                    <tr style={{ background: THEME.bgSoft }}>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colOrderId[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colDate[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colItems[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.orderStatusLabel[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colTotal[lang]}</th>
+                      <th className="px-4 py-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myOrders.map((order) => {
+                      const statusColor = orderStatusColor(order.status);
+                      return (
+                        <tr
+                          key={order.id}
+                          style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, borderInlineStart: `4px solid ${statusColor}` }}
+                        >
+                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
+                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
+                          <td className="px-4 py-5">
+                            <div className="flex flex-col gap-2">
+                              {order.items.map((it, idx) => {
+                                const product = products.find((p) => p.id === it.id);
+                                return (
+                                  <div key={idx} className="flex items-center gap-3">
+                                    <div className="w-10 h-10 flex-shrink-0">
+                                      {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
+                                    </div>
+                                    <p className="text-sm" style={{ color: THEME.ivory }}>
+                                      {product ? product.name[lang] : it.id} × {it.qty}
+                                    </p>
+                                  </div>
+                                );
+                              })}
                             </div>
-                            <p className="text-xs" style={{ color: THEME.ivory }}>
-                              {product ? product.name[lang] : it.id} × {it.qty}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span
-                        className="text-[11px] px-2 py-1 rounded-sm flex items-center gap-1.5 w-fit"
-                        style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
-                      >
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-                        {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
-                      </span>
-                      <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</span>
-                    </div>
-                    <button
-                      onClick={() => setInvoiceOrder(order)}
-                      className="w-full text-xs px-3 py-1.5 rounded-sm border"
-                      style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                    >
-                      {T.viewInvoice[lang]}
-                    </button>
-                  </div>
-                  );
-                })}
+                          </td>
+                          <td className="px-4 py-5 whitespace-nowrap">
+                            <span
+                              className="text-xs px-3 py-1.5 rounded-sm inline-flex items-center gap-1.5 w-fit"
+                              style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
+                            >
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
+                              {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
+                            </span>
+                          </td>
+                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
+                          <td className="px-4 py-5 whitespace-nowrap">
+                            <button
+                              onClick={() => setInvoiceOrder(order)}
+                              className="text-xs px-3 py-2 rounded-sm border"
+                              style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                            >
+                              {T.viewInvoice[lang]}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
