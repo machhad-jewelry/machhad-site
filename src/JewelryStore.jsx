@@ -3254,13 +3254,13 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
         <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noSalesYet[lang]}</p>
       ) : (
         <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
-          <table className="w-full border-collapse" style={{ minWidth: 650, tableLayout: "fixed" }}>
+          <table className="w-full border-collapse" style={{ minWidth: 460, tableLayout: "fixed" }}>
             <thead>
               <tr style={{ background: THEME.bgSoft }}>
-                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 150 }}>{T.orderStatusLabel[lang]}</th>
-                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</th>
-                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 90 }}>{T.colTotal[lang]}</th>
-                <th className="px-4 py-3" style={{ width: 130 }}></th>
+                <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim, width: 110 }}>{T.orderStatusLabel[lang]}</th>
+                <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</th>
+                <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim, width: 65 }}>{T.colTotal[lang]}</th>
+                <th className="px-2 py-2" style={{ width: 80 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -3271,15 +3271,15 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
                     key={order.id}
                     style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, borderInlineStart: `4px solid ${statusColor}` }}
                   >
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-2 py-2 whitespace-nowrap">
                       <select
                         value={order.status || "pending"}
                         onChange={async (e) => {
                           const ok = await onStatusChange(order.id, e.target.value);
                           setStatusErrorId(ok ? null : order.id);
                         }}
-                        className="text-xs px-2 py-1.5 rounded-sm"
-                        style={{ background: THEME.bgSoft, border: `1px solid ${statusColor}`, color: statusColor }}
+                        className="text-[11px] px-1 py-1 rounded-sm"
+                        style={{ background: THEME.bgSoft, border: `1px solid ${statusColor}`, color: statusColor, maxWidth: "100%" }}
                       >
                         {ORDER_STATUSES.map((s) => (
                           <option key={s} value={s} style={{ background: THEME.surface }}>
@@ -3288,18 +3288,18 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
                         ))}
                       </select>
                       {statusErrorId === order.id && (
-                        <div className="text-[10px] mt-1" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</div>
+                        <div className="text-[9px] mt-0.5" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm" style={{ color: THEME.ivory }}>
+                    <td className="px-2 py-2 text-[11px]" style={{ color: THEME.ivory }}>
                       {order.customerName || "—"}
                       {order.customerPhone && <span style={{ color: THEME.ivoryDim }}> · {order.customerPhone}</span>}
                     </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-2 py-2 text-[11px] whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">
                       <button
                         onClick={() => setInvoiceOrder(order)}
-                        className="text-xs px-3 py-2 rounded-sm border"
+                        className="text-[10px] px-2 py-1 rounded-sm border"
                         style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
                       >
                         {T.viewInvoice[lang]}
