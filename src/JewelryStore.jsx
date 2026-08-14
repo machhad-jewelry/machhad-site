@@ -3984,15 +3984,15 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
               <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
               <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
-                <table className="w-full border-collapse" style={{ minWidth: 720 }}>
+                <table className="w-full border-collapse" style={{ minWidth: 720, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ background: THEME.bgSoft }}>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colOrderId[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colDate[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colItems[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.orderStatusLabel[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colTotal[lang]}</th>
-                      <th className="px-4 py-4"></th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "14%" }}>{T.orderStatusLabel[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "12%" }}>{T.colOrderId[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "11%" }}>{T.colDate[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "38%" }}>{T.colItems[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "11%" }}>{T.colTotal[lang]}</th>
+                      <th className="px-4 py-4" style={{ width: "14%" }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4003,25 +4003,6 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                           key={order.id}
                           style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, borderInlineStart: `4px solid ${statusColor}` }}
                         >
-                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
-                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
-                          <td className="px-4 py-5">
-                            <div className="flex flex-col gap-2">
-                              {order.items.map((it, idx) => {
-                                const product = products.find((p) => p.id === it.id);
-                                return (
-                                  <div key={idx} className="flex items-center gap-3">
-                                    <div className="w-10 h-10 flex-shrink-0">
-                                      {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
-                                    </div>
-                                    <p className="text-sm" style={{ color: THEME.ivory }}>
-                                      {product ? product.name[lang] : it.id} × {it.qty}
-                                    </p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </td>
                           <td className="px-4 py-5 whitespace-nowrap">
                             <span
                               className="text-xs px-3 py-1.5 rounded-sm inline-flex items-center gap-1.5 w-fit"
@@ -4030,6 +4011,25 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                               <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
                               {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
                             </span>
+                          </td>
+                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
+                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
+                          <td className="px-4 py-5">
+                            <div className="flex flex-col gap-3">
+                              {order.items.map((it, idx) => {
+                                const product = products.find((p) => p.id === it.id);
+                                return (
+                                  <div key={idx} className="flex items-center gap-3">
+                                    <div className="w-10 h-10 flex-shrink-0">
+                                      {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
+                                    </div>
+                                    <p className="text-sm leading-relaxed" style={{ color: THEME.ivory }}>
+                                      {product ? product.name[lang] : it.id} × {it.qty}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </td>
                           <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
                           <td className="px-4 py-5 whitespace-nowrap">
