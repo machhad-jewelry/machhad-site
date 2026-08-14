@@ -4387,7 +4387,7 @@ export default function JewelryStore() {
   const filtered = useMemo(
     () =>
       products
-        .filter((p) => !p.hidden)
+        .filter((p) => !p.hidden && p.stock > 0)
         .filter((p) => (category === "all" || p.cat === category))
         .filter((p) => (country === "all" || productShipsTo(p, country))),
     [category, country, products]
@@ -4396,7 +4396,7 @@ export default function JewelryStore() {
   const mostViewed = useMemo(
     () =>
       products
-        .filter((p) => !p.hidden && p.views > 0)
+        .filter((p) => !p.hidden && p.stock > 0 && p.views > 0)
         .sort((a, b) => b.views - a.views)
         .slice(0, 10),
     [products]
