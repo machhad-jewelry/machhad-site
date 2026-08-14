@@ -3968,15 +3968,13 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
               <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
               <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
-                <table className="w-full border-collapse" style={{ minWidth: 920, tableLayout: "fixed" }}>
+                <table className="w-full border-collapse" style={{ minWidth: 320, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ background: THEME.bgSoft }}>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 150 }}>{T.orderStatusLabel[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 170 }}>{T.colOrderId[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 100 }}>{T.colDate[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colItems[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 90 }}>{T.colTotal[lang]}</th>
-                      <th className="px-4 py-4" style={{ width: 130 }}></th>
+                      <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim, width: 100 }}>{T.orderStatusLabel[lang]}</th>
+                      <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim, width: 80 }}>{T.colDate[lang]}</th>
+                      <th className="text-start px-2 py-2 text-[11px]" style={{ color: THEME.ivoryDim, width: 65 }}>{T.colTotal[lang]}</th>
+                      <th className="px-2 py-2" style={{ width: 80 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3987,39 +3985,21 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                           key={order.id}
                           style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, borderInlineStart: `4px solid ${statusColor}` }}
                         >
-                          <td className="px-4 py-5 whitespace-nowrap">
+                          <td className="px-2 py-2 whitespace-nowrap">
                             <span
-                              className="text-xs px-3 py-1.5 rounded-sm inline-flex items-center gap-1.5 w-fit"
+                              className="text-[10px] px-2 py-1 rounded-sm inline-flex items-center gap-1 w-fit"
                               style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
                             >
-                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
                               {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
                             </span>
                           </td>
-                          <td className="px-4 py-5 text-sm break-all" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
-                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
-                          <td className="px-4 py-5">
-                            <div className="flex flex-col gap-3">
-                              {order.items.map((it, idx) => {
-                                const product = products.find((p) => p.id === it.id);
-                                return (
-                                  <div key={idx} className="flex items-center gap-3">
-                                    <div className="w-10 h-10 flex-shrink-0">
-                                      {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
-                                    </div>
-                                    <p className="text-sm leading-relaxed" style={{ color: THEME.ivory }}>
-                                      {product ? product.name[lang] : it.id} × {it.qty}
-                                    </p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </td>
-                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
-                          <td className="px-4 py-5 whitespace-nowrap">
+                          <td className="px-2 py-2 text-[11px] whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
+                          <td className="px-2 py-2 text-[11px] whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
+                          <td className="px-2 py-2 whitespace-nowrap">
                             <button
                               onClick={() => setInvoiceOrder(order)}
-                              className="text-xs px-3 py-2 rounded-sm border"
+                              className="text-[10px] px-2 py-1 rounded-sm border"
                               style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
                             >
                               {T.viewInvoice[lang]}
@@ -4030,6 +4010,18 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {myOrders.length > 0 && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={onClose}
+                  className="px-6 py-2 rounded-sm text-xs tracking-widest uppercase border"
+                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                >
+                  {T.backBtn[lang]}
+                </button>
               </div>
             )}
           </div>
