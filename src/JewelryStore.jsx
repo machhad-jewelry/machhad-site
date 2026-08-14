@@ -3732,7 +3732,11 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError(true);
+      return;
+    }
     setAvatarLoading(true);
     setAvatarError(false);
     try {
@@ -3791,11 +3795,16 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
     }
     const profile = { id: data.user.id, name: name.trim(), email: email.trim(), phone: phone.trim() };
     const { error: profileErr } = await supabase.from("customers").insert(profile);
-    if (!profileErr) {
-      await supabase.rpc("link_past_orders_by_phone", { p_phone: profile.phone });
-    }
+    // ربط الطلبات القديمة تلقائيًا بالهاتف معطّل مؤقتًا — كان بيربط أي طلب قديم برقم هاتف
+    // يكتبه أي مستخدم بنفسه بدون تحقق فعلي إنه رقمه، ما بيمنع حدا من ادّعاء رقم زبون تاني
     setLoading(false);
-    if (profileErr) { setError(true); return; }
+    if (profileErr) {
+      // فشل إنشاء صف customers بعد نجاح تسجيل الدخول Auth — نسجّل خروج فورًا حتى ما تبقى
+      // جلسة فعّالة بدون بروفايل زبون مطابق (كان بيسبب فشل صامت لاحقًا برفع الصورة والطلبات)
+      await supabase.auth.signOut();
+      setError(true);
+      return;
+    }
     onAuthed(profile);
     setPassword("");
   };
@@ -4164,6 +4173,10 @@ export default function JewelryStore() {
   useEffect(() => {
     if (IS_ADMIN_DOMAIN || !session) {
       setCustomerProfile(null);
+      // تفريغ حقلي الاسم/الهاتف عند تسجيل الخروج — يمنع بقاء بيانات الزبون السابق ظاهرة
+      // بنموذج الشراء لو جهاز مشترك دخل عليه زبون تاني بعده مباشرة
+      setCustomerName("");
+      setCustomerPhone("");
       return;
     }
     supabase
@@ -4184,8 +4197,7 @@ export default function JewelryStore() {
   }, [customerProfile]);
 
   // إعادة تحميل الطلبات فور تسجيل الدخول/إنشاء الحساب — التحميل الأولي (قبل الدخول) ما بيشمل
-  // أي طلبات (RLS)، فلازم نجيبها من جديد هلق حتى تظهر بقسم "طلباتي" فورًا، بما فيها الطلبات
-  // القديمة اللي انربطت تلقائيًا برقم الهاتف عند التسجيل
+  // أي طلبات (RLS)، فلازم نجيبها من جديد هلق حتى تظهر بقسم "طلباتي" فورًا
   useEffect(() => {
     if (IS_ADMIN_DOMAIN) return;
     if (!session) {
@@ -4194,7 +4206,7 @@ export default function JewelryStore() {
     }
     Promise.all([
       supabase.from("orders").select("*").order("created_at"),
-      supabase.from("order_items").select("*"),
+      supabase.from("order_items_customer").select("*"),
     ]).then(([ordersRes, itemsRes]) => {
       if (ordersRes.data && itemsRes.data) {
         const itemsByOrder = {};
@@ -4245,9 +4257,11 @@ export default function JewelryStore() {
       });
   }, [currentAdminEmail, isSuperAdmin]);
 
-  // قائمة إيميلات الفواتير حساسة (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله، مش جزء من التحميل العام
+  // قائمة إيميلات الفواتير حساسة (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله على دومين
+  // الإدارة، مش جزء من التحميل العام. RLS هي الحارس الحقيقي أصلًا، بس هالشرط يمنع حتى محاولة
+  // الطلب من جلسة زبون عادي على المتجر العام
   useEffect(() => {
-    if (!currentAdminEmail) {
+    if (!IS_ADMIN_DOMAIN || !currentAdminEmail) {
       setInvoiceRecipients([]);
       return;
     }
@@ -4260,9 +4274,11 @@ export default function JewelryStore() {
       });
   }, [currentAdminEmail]);
 
-  // قائمة الزبائن المسجّلين (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله، مش جزء من التحميل العام
+  // قائمة الزبائن المسجّلين (بيانات إدارية) — تُحمَّل فقط لمشرف مسجّل دخوله على دومين الإدارة،
+  // مش جزء من التحميل العام. RLS هي الحارس الحقيقي أصلًا، بس هالشرط يمنع حتى محاولة الطلب
+  // من جلسة زبون عادي على المتجر العام
   useEffect(() => {
-    if (!currentAdminEmail) {
+    if (!IS_ADMIN_DOMAIN || !currentAdminEmail) {
       setCustomers([]);
       return;
     }
@@ -4291,10 +4307,13 @@ export default function JewelryStore() {
       // محصور بدومين الإدارة: جلسة زبون على المتجر العام ما لازم توصّل أبدًا لعمود cost بجدول المنتجات
       const { data: sessionData } = await supabase.auth.getSession();
       const productsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "products" : "products_public";
+      // نفس المنطق: order_items الأساسي فيه عمود cost (تكلفة الجملة) — الزبون/الزائر يقرأ من
+      // عرض order_items_customer المقيّد الأعمدة فقط، مش الجدول الأساسي
+      const orderItemsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "order_items" : "order_items_customer";
       const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
         supabase.from(productsTable).select("*").order("created_at"),
         supabase.from("orders").select("*").order("created_at"),
-        supabase.from("order_items").select("*"),
+        supabase.from(orderItemsTable).select("*"),
         supabase.from("reps").select("*").order("id"),
         supabase.from("exchange_rates").select("*"),
         supabase.from("metal_prices").select("*").eq("id", 1).maybeSingle(),
@@ -4371,7 +4390,7 @@ export default function JewelryStore() {
       products
         .filter((p) => !p.hidden)
         .filter((p) => (category === "all" || p.cat === category))
-        .filter((p) => (country === "all" || p.countries.includes(country))),
+        .filter((p) => (country === "all" || productShipsTo(p, country))),
     [category, country, products]
   );
 

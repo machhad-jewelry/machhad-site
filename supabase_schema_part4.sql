@@ -145,6 +145,9 @@ end;
 $$ language plpgsql security definer;
 
 -- 2026-08-12: بعد نشر الواجهة الجديدة التي تفرض تسجيل الدخول والتحقق منها حيًا، تم سحب صلاحية
--- anon نهائيًا (كتابة الملف مُحدّثة لتعكس الحالة النهائية — الحماية المؤقتة أعلاه لم تعد مطلوبة)
+-- anon نهائيًا (كتابة الملف مُحدّثة لتعكس الحالة النهائية — الحماية المؤقتة أعلاه لم تعد مطلوبة).
+-- لازم سحبها من anon صراحة كمان، مش بس PUBLIC — منح PUBLIC ومنح anon صفان مستقلان بنظام
+-- صلاحيات Postgres، سحب واحد ما يلغي التاني (راجع نفس الدرس مع link_past_orders_by_phone)
 revoke execute on function place_order(text, text, text, text, text, jsonb) from public;
+revoke execute on function place_order(text, text, text, text, text, jsonb) from anon;
 grant execute on function place_order(text, text, text, text, text, jsonb) to authenticated;
