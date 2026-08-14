@@ -4320,8 +4320,16 @@ export default function JewelryStore() {
       // نفس المنطق: order_items الأساسي فيه عمود cost (تكلفة الجملة) — الزبون/الزائر يقرأ من
       // عرض order_items_customer المقيّد الأعمدة فقط، مش الجدول الأساسي
       const orderItemsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "order_items" : "order_items_customer";
-      const [productsRes, ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
-        supabase.from(productsTable).select("*").order("created_at"),
+
+      // المنتجات تحمل صور Base64 داخل الأعمدة (لا يوجد Storage bucket بهالمشروع، راجع الملاحظات
+      // بالأعلى) فحجمها وبالتالي وقت جلبها أكبر بكثير من باقي الجداول (لوحظ ~4.6 ثانية مقابل أقل
+      // من ثانية للباقي) — منفصلة عمدًا عن الدفعة الرئيسية حتى ما توقّف ظهور الطلبات/التصنيفات/
+      // الأسعار وباقي الواجهة (بما فيها "طلباتي" ولوحة الإدارة) بانتظارها؛ تتحدّث لوحدها فور وصولها
+      supabase.from(productsTable).select("*").order("created_at").then(({ data }) => {
+        if (data) setRawProducts(data.map(productRowToApp));
+      });
+
+      const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at"),
         supabase.from(orderItemsTable).select("*"),
         supabase.from("reps").select("*").order("id"),
@@ -4332,7 +4340,6 @@ export default function JewelryStore() {
         supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       ]);
 
-      if (productsRes.data) setRawProducts(productsRes.data.map(productRowToApp));
       if (gramPricesRes.data) setMetalGramPrices(metalGramPricesRowToApp(gramPricesRes.data));
       if (siteSettingsRes.data) {
         setHeroTitle({
