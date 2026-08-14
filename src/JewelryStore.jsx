@@ -752,6 +752,7 @@ const T = {
   mostViewed: { ar: "الأكثر مشاهدة", en: "Most Viewed", fr: "Les Plus Vus" },
   chooseCountry: { ar: "تسوّق حسب البلد", en: "Shop by Country", fr: "Acheter par Pays" },
   allCountries: { ar: "كل البلدان", en: "All Countries", fr: "Tous les Pays" },
+  allStatuses: { ar: "كل الحالات", en: "All Statuses", fr: "Tous les Statuts" },
   noStock: {
     ar: "لا توجد قطع متوفرة حاليًا لهذا البلد ضمن هذا التصنيف.",
     en: "No pieces are currently available for this country in this category.",
@@ -3160,11 +3161,13 @@ function orderStatusColor(status) {
 
 function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
   const [filterCountry, setFilterCountry] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [statusErrorId, setStatusErrorId] = useState(null);
 
   const rows = orders
     .filter((o) => filterCountry === "all" || o.country === filterCountry)
+    .filter((o) => filterStatus === "all" || (o.status || "pending") === filterStatus)
     .slice()
     .reverse();
 
@@ -3213,6 +3216,38 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
             {c[lang]}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-2 mb-6">
+        <button
+          onClick={() => setFilterStatus("all")}
+          className="px-4 py-1.5 rounded-sm text-xs tracking-wide uppercase border"
+          style={{
+            borderColor: THEME.surfaceLine,
+            background: filterStatus === "all" ? THEME.gold : "transparent",
+            color: filterStatus === "all" ? "#FFFFFF" : THEME.ivoryDim,
+          }}
+        >
+          {T.allStatuses[lang]}
+        </button>
+        {ORDER_STATUSES.map((s) => {
+          const color = orderStatusColor(s);
+          const active = filterStatus === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className="px-4 py-1.5 rounded-sm text-xs tracking-wide uppercase border"
+              style={{
+                borderColor: active ? color : THEME.surfaceLine,
+                background: active ? color : "transparent",
+                color: active ? "#FFFFFF" : THEME.ivoryDim,
+              }}
+            >
+              {T[ORDER_STATUS_LABEL_KEYS[s]][lang]}
+            </button>
+          );
+        })}
       </div>
 
       {rows.length === 0 ? (
