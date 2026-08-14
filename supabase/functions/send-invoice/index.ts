@@ -2,12 +2,89 @@
 // أمان: لا نثق بأي بيانات نصية يرسلها المتصفح (اسم الزبون، الهاتف، الإجمالي...) —
 // نتحقق أولًا إن الطلب موجود فعليًا بقاعدة البيانات ونستخرج بياناته الحقيقية من هناك،
 // حتى ما يقدر حدا يستدعي هاي الوظيفة مباشرة ويرسل إيميلات وهمية بمحتوى مفبرك.
+//
+// 2026-08-14: كانت الوظيفة توثق بملف PDF يرسله المتصفح كما هو (pdfBase64) وترفقه بالإيميل
+// بدون أي تحقق من محتواه — أي زبون عنده طلب حقيقي واحد (حتى أرخص صنف) يقدر يستبدل المرفق
+// بأي ملف ويرسله لصندوق بريد صاحب المتجر عبر بنية الموقع نفسها. الآن الفاتورة تُبنى بالكامل
+// من داخل الوظيفة اعتمادًا على بيانات الطلب/الأصناف/أسماء المنتجات المقروءة من القاعدة مباشرة —
+// المتصفح ما عاد يرسل ولا يتحكم بأي جزء من ملف الـ PDF المرفق إطلاقًا.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { jsPDF } from "npm:jspdf@2.5.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function buildInvoicePdf(order: any, items: any[], productNames: Record<string, string>) {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const marginX = 40;
+  const pageBottom = 780;
+  const rowHeight = 20;
+  let y = 50;
+
+  doc.setFontSize(18);
+  doc.text("Machhad - Invoice", marginX, y);
+  y += 26;
+
+  doc.setFontSize(10);
+  doc.text(`Order #: ${order.id}`, marginX, y); y += 16;
+  doc.text(`Date: ${order.order_date ?? ""}`, marginX, y); y += 16;
+  doc.text(`Customer: ${order.customer_name ?? ""}`, marginX, y); y += 16;
+  doc.text(`Phone: ${order.customer_phone ?? ""}`, marginX, y); y += 16;
+  doc.text(`Country: ${order.country ?? ""}`, marginX, y); y += 16;
+  doc.text(`Payment method: ${order.payment ?? ""}`, marginX, y); y += 26;
+
+  const colName = marginX;
+  const colSize = 300;
+  const colQty = 355;
+  const colUnit = 400;
+  const colSub = 480;
+
+  const drawHeader = () => {
+    doc.setFontSize(11);
+    doc.text("Item", colName, y);
+    doc.text("Size", colSize, y);
+    doc.text("Qty", colQty, y);
+    doc.text("Unit Price", colUnit, y);
+    doc.text("Subtotal", colSub, y);
+    y += 6;
+    doc.line(marginX, y, 555, y);
+    y += 16;
+    doc.setFontSize(10);
+  };
+  drawHeader();
+
+  let total = 0;
+  for (const it of items) {
+    if (y + rowHeight > pageBottom) {
+      doc.addPage();
+      y = 50;
+      drawHeader();
+    }
+    const name = productNames[it.product_id] || it.product_id || "";
+    const price = Number(it.price) || 0;
+    const qty = Number(it.qty) || 0;
+    const lineTotal = price * qty;
+    total += lineTotal;
+
+    doc.text(String(name).slice(0, 34), colName, y);
+    doc.text(it.size || "-", colSize, y);
+    doc.text(String(qty), colQty, y);
+    doc.text(price.toFixed(2) + " USD", colUnit, y);
+    doc.text(lineTotal.toFixed(2) + " USD", colSub, y);
+    y += rowHeight;
+  }
+
+  y += 10;
+  doc.line(marginX, y, 555, y);
+  y += 20;
+  doc.setFontSize(12);
+  doc.text(`Total: ${total.toFixed(2)} USD`, colUnit, y);
+
+  const dataUri = doc.output("datauristring");
+  return { pdfBase64: dataUri.split(",")[1], total };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,9 +92,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { orderId, pdfBase64 } = await req.json();
-    if (!orderId || !pdfBase64) {
-      throw new Error("orderId and pdfBase64 are required");
+    const { orderId } = await req.json();
+    if (!orderId) {
+      throw new Error("orderId is required");
     }
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
@@ -56,7 +133,14 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("order_id", orderId);
 
-    const total = (items ?? []).reduce((s: number, it: any) => s + Number(it.price) * it.qty, 0);
+    const productIds = [...new Set((items ?? []).map((it: any) => it.product_id).filter(Boolean))];
+    const { data: productRows } = productIds.length
+      ? await supabaseAdmin.from("products").select("id, name_en, name_ar").in("id", productIds)
+      : { data: [] as any[] };
+    const productNames: Record<string, string> = {};
+    (productRows ?? []).forEach((p: any) => { productNames[p.id] = p.name_en || p.name_ar || p.id; });
+
+    const { pdfBase64, total } = buildInvoicePdf(order, items ?? [], productNames);
 
     const html = `
       <div dir="rtl" style="font-family: sans-serif;">

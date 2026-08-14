@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail, Contact } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
-import { generateInvoicePdf } from "./invoicePdf";
 
 // دومين مخصص للإدارة فقط — المتجر العام ما بيعرض أي رابط أو مدخل للوحة الإدارة إطلاقًا
 const ADMIN_HOSTNAMES = ["machhadjewelry.site", "www.machhadjewelry.site"];
@@ -5396,16 +5395,12 @@ export default function JewelryStore() {
                     setCountryError(false);
                     setOrderPlaced(true);
 
-                    // إرسال فاتورة PDF لصاحب المتجر بالإيميل — لا يوقف عملية الشراء إذا فشل
-                    // الوظيفة الخادمية بتتحقق من الطلب بقاعدة البيانات وتجيب بياناته الحقيقية بنفسها
-                    try {
-                      const pdfBase64 = generateInvoicePdf(newOrder, products, T.brand.en);
-                      supabase.functions
-                        .invoke("send-invoice", { body: { orderId: newOrder.id, pdfBase64 } })
-                        .catch((err) => console.error("send-invoice failed:", err));
-                    } catch (err) {
-                      console.error("PDF generation failed:", err);
-                    }
+                    // إرسال فاتورة PDF لصاحب المتجر بالإيميل — لا يوقف عملية الشراء إذا فشل.
+                    // الفاتورة تُبنى بالكامل داخل الوظيفة الخادمية من بيانات القاعدة نفسها، مش
+                    // من ملف يرسله المتصفح — تفاديًا لإمكانية إرسال أي مرفق مزوّر عبر هالمسار
+                    supabase.functions
+                      .invoke("send-invoice", { body: { orderId: newOrder.id } })
+                      .catch((err) => console.error("send-invoice failed:", err));
                   }}
                   disabled={selectedCart.length === 0}
                   className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
