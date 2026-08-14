@@ -3254,11 +3254,10 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
         <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noSalesYet[lang]}</p>
       ) : (
         <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
-          <table className="w-full border-collapse" style={{ minWidth: 820, tableLayout: "fixed" }}>
+          <table className="w-full border-collapse" style={{ minWidth: 650, tableLayout: "fixed" }}>
             <thead>
               <tr style={{ background: THEME.bgSoft }}>
                 <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 150 }}>{T.orderStatusLabel[lang]}</th>
-                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 170 }}>{T.colOrderId[lang]}</th>
                 <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</th>
                 <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 90 }}>{T.colTotal[lang]}</th>
                 <th className="px-4 py-3" style={{ width: 130 }}></th>
@@ -3292,7 +3291,6 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
                         <div className="text-[10px] mt-1" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm break-all" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
                     <td className="px-4 py-3 text-sm" style={{ color: THEME.ivory }}>
                       {order.customerName || "—"}
                       {order.customerPhone && <span style={{ color: THEME.ivoryDim }}> · {order.customerPhone}</span>}
