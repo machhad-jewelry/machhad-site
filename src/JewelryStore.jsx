@@ -3189,7 +3189,7 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
     }, 0);
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="flex flex-wrap justify-center gap-2 mb-6">
         <button
           onClick={() => setFilterCountry("all")}
@@ -3253,79 +3253,65 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
       {rows.length === 0 ? (
         <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noSalesYet[lang]}</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {rows.map((order) => (
-            <div
-              key={order.id}
-              className="p-4 rounded-sm"
-              style={{
-                background: THEME.surface,
-                border: `1px solid ${THEME.surfaceLine}`,
-                borderInlineStart: `3px solid ${orderStatusColor(order.status)}`,
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.colOrderId[lang]}: {order.id.replace("S-", "")}</span>
-                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{order.date}</span>
-              </div>
-              {order.customerName && (
-                <p className="text-sm mb-1" style={{ color: THEME.ivory }}>
-                  {order.customerName}{order.customerPhone ? ` · ${order.customerPhone}` : ""}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-3 mb-3 text-xs" style={{ color: THEME.ivoryDim }}>
-                <span>{countryLabel(order.country)}</span>
-                {order.payment && <span>· {paymentLabel(order.payment)}</span>}
-              </div>
-              <div className="flex flex-col gap-2 mb-3">
-                {order.items.map((it, idx) => {
-                  const product = products.find((p) => p.id === it.id);
-                  return (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="w-10 h-10 flex-shrink-0">
-                        {product ? <ProductVisual product={product} /> : <div className="w-full h-full rounded-full" style={{ background: THEME.bgSoft }} />}
-                      </div>
-                      <p className="text-sm" style={{ color: THEME.ivory }}>
-                        {product ? product.name[lang] : it.id} × {it.qty}
-                        {it.size ? ` (${it.size})` : ""}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.orderStatusLabel[lang]}</span>
-                <select
-                  value={order.status || "pending"}
-                  onChange={async (e) => {
-                    const ok = await onStatusChange(order.id, e.target.value);
-                    setStatusErrorId(ok ? null : order.id);
-                  }}
-                  className="text-xs px-2 py-1.5 rounded-sm"
-                  style={{ background: THEME.bgSoft, border: `1px solid ${orderStatusColor(order.status)}`, color: orderStatusColor(order.status) }}
-                >
-                  {ORDER_STATUSES.map((s) => (
-                    <option key={s} value={s} style={{ background: THEME.surface }}>
-                      {T[`status${s.charAt(0).toUpperCase()}${s.slice(1)}`][lang]}
-                    </option>
-                  ))}
-                </select>
-                {statusErrorId === order.id && (
-                  <span className="text-xs" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</span>
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setInvoiceOrder(order)}
-                  className="text-xs px-3 py-2 rounded-sm border"
-                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                >
-                  {T.viewInvoice[lang]}
-                </button>
-                <span className="text-sm" style={{ color: THEME.goldSoft }}>{T.colTotal[lang]}: {fmtPrice(orderTotal(order))}</span>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
+          <table className="w-full border-collapse" style={{ minWidth: 820, tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ background: THEME.bgSoft }}>
+                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 150 }}>{T.orderStatusLabel[lang]}</th>
+                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 170 }}>{T.colOrderId[lang]}</th>
+                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim }}>{T.customerName[lang]}</th>
+                <th className="text-start px-4 py-3 text-sm" style={{ color: THEME.ivoryDim, width: 90 }}>{T.colTotal[lang]}</th>
+                <th className="px-4 py-3" style={{ width: 130 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((order) => {
+                const statusColor = orderStatusColor(order.status);
+                return (
+                  <tr
+                    key={order.id}
+                    style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, borderInlineStart: `4px solid ${statusColor}` }}
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <select
+                        value={order.status || "pending"}
+                        onChange={async (e) => {
+                          const ok = await onStatusChange(order.id, e.target.value);
+                          setStatusErrorId(ok ? null : order.id);
+                        }}
+                        className="text-xs px-2 py-1.5 rounded-sm"
+                        style={{ background: THEME.bgSoft, border: `1px solid ${statusColor}`, color: statusColor }}
+                      >
+                        {ORDER_STATUSES.map((s) => (
+                          <option key={s} value={s} style={{ background: THEME.surface }}>
+                            {T[ORDER_STATUS_LABEL_KEYS[s]][lang]}
+                          </option>
+                        ))}
+                      </select>
+                      {statusErrorId === order.id && (
+                        <div className="text-[10px] mt-1" style={{ color: "#E07A7A" }}>{T.updateFailed[lang]}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm break-all" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: THEME.ivory }}>
+                      {order.customerName || "—"}
+                      {order.customerPhone && <span style={{ color: THEME.ivoryDim }}> · {order.customerPhone}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap" style={{ color: THEME.goldSoft }}>{fmtPrice(orderTotal(order))}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <button
+                        onClick={() => setInvoiceOrder(order)}
+                        className="text-xs px-3 py-2 rounded-sm border"
+                        style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                      >
+                        {T.viewInvoice[lang]}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
