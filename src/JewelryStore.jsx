@@ -3984,15 +3984,15 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
               <p className="text-sm text-center" style={{ color: THEME.ivoryDim }}>{T.noOrdersYet[lang]}</p>
             ) : (
               <div className="overflow-x-auto rounded-sm" style={{ border: `1px solid ${THEME.surfaceLine}` }}>
-                <table className="w-full border-collapse" style={{ minWidth: 720, tableLayout: "fixed" }}>
+                <table className="w-full border-collapse" style={{ minWidth: 920, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ background: THEME.bgSoft }}>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "14%" }}>{T.orderStatusLabel[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "12%" }}>{T.colOrderId[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "11%" }}>{T.colDate[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "38%" }}>{T.colItems[lang]}</th>
-                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: "11%" }}>{T.colTotal[lang]}</th>
-                      <th className="px-4 py-4" style={{ width: "14%" }}></th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 150 }}>{T.orderStatusLabel[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 170 }}>{T.colOrderId[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 100 }}>{T.colDate[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim }}>{T.colItems[lang]}</th>
+                      <th className="text-start px-4 py-4 text-sm" style={{ color: THEME.ivoryDim, width: 90 }}>{T.colTotal[lang]}</th>
+                      <th className="px-4 py-4" style={{ width: 130 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4012,7 +4012,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                               {T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"][lang]}
                             </span>
                           </td>
-                          <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
+                          <td className="px-4 py-5 text-sm break-all" style={{ color: THEME.ivoryDim }}>{order.id.replace("S-", "")}</td>
                           <td className="px-4 py-5 text-sm whitespace-nowrap" style={{ color: THEME.ivoryDim }}>{order.date}</td>
                           <td className="px-4 py-5">
                             <div className="flex flex-col gap-3">
