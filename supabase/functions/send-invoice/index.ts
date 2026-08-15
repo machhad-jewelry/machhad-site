@@ -138,7 +138,13 @@ Deno.serve(async (req) => {
         sku: product.barcode || "",
         qty: it.qty,
         unitPrice: Number(it.price) || 0,
-        image: (product.images && product.images[0]) || null,
+        // لا نُضمّن صور المنتجات الحقيقية بالفاتورة المُرسَلة بالإيميل عمدًا: doc.addImage/getImageProperties
+        // بمكتبة jsPDF (فك ترميز PNG/JPEG بجافاسكريبت بحت) يتجاوز حصة موارد Deno Edge Function هون
+        // بشكل ثابت — حتى صورة اختبار 1×1 بكسل فشّلت الوظيفة بـ WORKER_RESOURCE_LIMIT، لا علاقة
+        // للحجم الفعلي بالأمر. نفس القالب (invoiceTemplate.js) يرسم صندوق بديل أنيق بدل الصورة —
+        // نفس الشكل يلي يظهر أصلًا لأي صنف بلا صورة. التنزيل من المتصفح يعرض الصورة الحقيقية طبيعي
+        // (لا حصة موارد مشددة هناك) — فرق مقصود ومبرر تقنيًا، مو تصميم مختلف عمدًا.
+        image: null,
         size: it.size || null,
         saleMethod: product.sale_method || "piece",
         weightGrams: product.weight_grams != null ? Number(product.weight_grams) : null,
