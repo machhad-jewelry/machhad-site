@@ -29,3 +29,17 @@ update categories set sort_order = 20 where id = 'bracelets';
 update categories set sort_order = 30 where id = 'masabih';
 update categories set sort_order = 40 where id = 'rings';
 update categories set sort_order = 50 where id = 'women-s-silver-rings';
+
+-- عمودا bead_count/bead_size الجديدان لازم ينضافوا لعرض products_public كمان، وإلا الزوار/الزبائن
+-- (يستخدمون هالعرض، مش الجدول الأساسي) ما رح يشوفوهم أبدًا — نفس نمط العرض الحالي بالضبط بزيادة عمودين فقط
+-- ملاحظة: الأعمدة الجديدة لازم تُضاف بآخر قائمة SELECT، مش وسطها — Postgres يرفض تغيير موقع
+-- عمود موجود أصلًا بـ CREATE OR REPLACE VIEW (جرّبتها غلط أول مرة، رجّعت الخطأ 42P16)
+create or replace view products_public as
+  select id, cat, color, name_ar, name_en, name_fr, mat_ar, mat_en, mat_fr,
+         desc_ar, desc_en, desc_fr, price, original_price, stock, sizes, images,
+         countries, barcode, views, sale_method, weight_grams, metal_type, gold_karat,
+         silver_type, created_at, bead_count, bead_size
+  from products
+  where hidden = false;
+
+grant select on products_public to anon, authenticated;
