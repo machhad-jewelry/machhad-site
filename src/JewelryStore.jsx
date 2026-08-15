@@ -583,10 +583,36 @@ const DEFAULT_CATEGORIES = [
 ];
 
 function categoryRowToApp(row) {
-  return { id: row.id, name: { ar: row.name_ar || "", en: row.name_en || "", fr: row.name_fr || "" } };
+  return {
+    id: row.id,
+    name: { ar: row.name_ar || "", en: row.name_en || "", fr: row.name_fr || "" },
+    description: { ar: row.description_ar || "", en: row.description_en || "", fr: row.description_fr || "" },
+    image: row.image || null,
+    sortOrder: row.sort_order ?? 0,
+    active: row.active !== false,
+    saleType: row.sale_type || "piece",
+    requiresRingSize: !!row.requires_ring_size,
+    requiresBeadCount: !!row.requires_bead_count,
+    requiresBeadSize: !!row.requires_bead_size,
+  };
 }
 function categoryAppToRow(c) {
-  return { id: c.id, name_ar: c.name.ar, name_en: c.name.en, name_fr: c.name.fr };
+  return {
+    id: c.id,
+    name_ar: c.name.ar,
+    name_en: c.name.en,
+    name_fr: c.name.fr,
+    description_ar: c.description?.ar || null,
+    description_en: c.description?.en || null,
+    description_fr: c.description?.fr || null,
+    image: c.image || null,
+    sort_order: c.sortOrder ?? 0,
+    active: c.active !== false,
+    sale_type: c.saleType || "piece",
+    requires_ring_size: !!c.requiresRingSize,
+    requires_bead_count: !!c.requiresBeadCount,
+    requires_bead_size: !!c.requiresBeadSize,
+  };
 }
 function slugifyCategoryId(s) {
   return s
@@ -642,6 +668,8 @@ function productRowToApp(row) {
     metalType: row.metal_type || null,
     goldKarat: row.gold_karat != null ? Number(row.gold_karat) : null,
     silverType: row.silver_type || null,
+    beadCount: row.bead_count != null ? Number(row.bead_count) : null,
+    beadSize: row.bead_size || null,
   };
 }
 
@@ -668,6 +696,8 @@ function productAppToRow(p) {
     metal_type: p.saleMethod === "weight" ? p.metalType || null : null,
     gold_karat: p.saleMethod === "weight" && p.metalType === "gold" ? p.goldKarat || null : null,
     silver_type: p.saleMethod === "weight" && p.metalType === "silver" ? p.silverType || null : null,
+    bead_count: p.beadCount || null,
+    bead_size: p.beadSize || null,
   };
 }
 
@@ -972,6 +1002,21 @@ const T = {
   categoryDeleted: { ar: "تم حذف التصنيف", en: "Category deleted", fr: "Catégorie supprimée" },
   categoryUpdated: { ar: "تم تعديل التصنيف", en: "Category updated", fr: "Catégorie mise à jour" },
   confirmDeleteCategory: { ar: "حذف هذا التصنيف؟", en: "Delete this category?", fr: "Supprimer cette catégorie ?" },
+  categoryLinkedCannotDelete: { ar: "لا يمكن حذف هذا التصنيف لأنه مرتبط بمنتجات موجودة", en: "This category can't be deleted — it's linked to existing products", fr: "Impossible de supprimer cette catégorie — elle est liée à des produits existants" },
+  categoryImageLabel: { ar: "صورة التصنيف", en: "Category Image", fr: "Image de la Catégorie" },
+  categoryDescLabel: { ar: "وصف التصنيف (اختياري)", en: "Category Description (optional)", fr: "Description de la Catégorie (facultatif)" },
+  saleTypeLabel: { ar: "طريقة البيع", en: "Sale Type", fr: "Type de Vente" },
+  saleTypePiece: { ar: "بالحبة / القطعة", en: "Sold by Piece", fr: "Vendu à la Pièce" },
+  saleTypeWeight: { ar: "بالوزن", en: "Sold by Weight", fr: "Vendu au Poids" },
+  requiresRingSizeLabel: { ar: "يتطلب مقاس الخاتم", en: "Requires Ring Size", fr: "Nécessite une Taille de Bague" },
+  requiresBeadCountLabel: { ar: "يتطلب عدد الحبات", en: "Requires Bead Count", fr: "Nécessite le Nombre de Perles" },
+  requiresBeadSizeLabel: { ar: "يتطلب مقاس الحبة", en: "Requires Bead Size", fr: "Nécessite la Taille des Perles" },
+  categoryActiveLabel: { ar: "مُفعّل (يظهر للزبائن)", en: "Active (visible to customers)", fr: "Actif (visible aux clients)" },
+  moveUpLabel: { ar: "تحريك لأعلى", en: "Move Up", fr: "Monter" },
+  moveDownLabel: { ar: "تحريك لأسفل", en: "Move Down", fr: "Descendre" },
+  beadCountLabel: { ar: "عدد الحبات", en: "Bead Count", fr: "Nombre de Perles" },
+  beadSizeLabel: { ar: "مقاس الحبة", en: "Bead Size", fr: "Taille des Perles" },
+  beadSizePlaceholder: { ar: "مثال: 8mm", en: "e.g. 8mm", fr: "ex. 8mm" },
   translateBtn: { ar: "ترجم", en: "Translate", fr: "Traduire" },
   translating: { ar: "جارِ الترجمة...", en: "Translating...", fr: "Traduction en cours..." },
   translateNeedsArabic: { ar: "اكتب الاسم بالعربي أولًا", en: "Type the Arabic name first", fr: "Saisissez d'abord le nom en arabe" },
@@ -1152,8 +1197,17 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
     color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
     saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
+    beadCount: "", beadSize: "",
   });
   const [msg, setMsg] = useState("");
+
+  // قواعد التصنيف المختار — تحدد الحقول اللي لازم تظهر وتلقّن طريقة البيع الافتراضية (يقدر
+  // المشرف يغيّرها يدويًا بعدين، مش قفل صارم — راجع القرار المتفق عليه بخطة نظام قواعد التصنيفات)
+  const selectedCategory = categories.find((c) => c.id === form.cat);
+  const onCategoryChange = (catId) => {
+    const cat = categories.find((c) => c.id === catId);
+    setForm((f) => ({ ...f, cat: catId, saleMethod: cat?.saleType || f.saleMethod }));
+  };
 
   const [aiDesc, setAiDesc] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -1342,6 +1396,8 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       metalType: isWeightSale ? form.metalType : null,
       goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
+      beadCount: selectedCategory?.requiresBeadCount && form.beadCount ? Number(form.beadCount) : null,
+      beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
     });
     if (!ok) {
       setMsg(T.updateFailed[lang]);
@@ -1354,6 +1410,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
       color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
       saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
+      beadCount: "", beadSize: "",
     });
   };
 
@@ -1477,7 +1534,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div>
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
-          <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+          <select value={form.cat} onChange={(e) => onCategoryChange(e.target.value)} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
             {categories.map((c) => (
               <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.name[lang]}</option>
             ))}
@@ -1548,17 +1605,36 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
         <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="w-16 h-9 rounded-sm border" style={{ borderColor: THEME.surfaceLine, background: "transparent" }} />
       </div>
 
-      <div className="mb-3">
-        <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.sizesLabel[lang]}</label>
-        <input
-          type="text"
-          placeholder="16, 17, 18"
-          value={form.sizesText}
-          onChange={(e) => setForm({ ...form, sizesText: e.target.value })}
-          className="w-full px-3 py-2 rounded-sm text-sm"
-          style={inputStyle}
-        />
-      </div>
+      {selectedCategory?.requiresRingSize && (
+        <div className="mb-3">
+          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.sizesLabel[lang]}</label>
+          <input
+            type="text"
+            placeholder="16, 17, 18"
+            value={form.sizesText}
+            onChange={(e) => setForm({ ...form, sizesText: e.target.value })}
+            className="w-full px-3 py-2 rounded-sm text-sm"
+            style={inputStyle}
+          />
+        </div>
+      )}
+
+      {(selectedCategory?.requiresBeadCount || selectedCategory?.requiresBeadSize) && (
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          {selectedCategory?.requiresBeadCount && (
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.beadCountLabel[lang]}</label>
+              <input type="number" value={form.beadCount} onChange={(e) => setForm({ ...form, beadCount: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+            </div>
+          )}
+          {selectedCategory?.requiresBeadSize && (
+            <div>
+              <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.beadSizeLabel[lang]}</label>
+              <input type="text" placeholder={T.beadSizePlaceholder[lang]} value={form.beadSize} onChange={(e) => setForm({ ...form, beadSize: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-3">
         <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.repLabel[lang]} *</label>
@@ -1749,16 +1825,110 @@ function AdminReps({ lang, reps, setReps }) {
   );
 }
 
-function AdminCategories({ lang, categories, setCategories }) {
-  const [form, setForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
+const EMPTY_CATEGORY_FORM = {
+  nameAr: "", nameEn: "", nameFr: "",
+  descAr: "", descEn: "", descFr: "",
+  image: null,
+  saleType: "piece",
+  requiresRingSize: false,
+  requiresBeadCount: false,
+  requiresBeadSize: false,
+  active: true,
+};
+
+function categoryFormToPatch(f) {
+  return {
+    name_ar: f.nameAr.trim(),
+    name_en: f.nameEn.trim(),
+    name_fr: f.nameFr.trim(),
+    description_ar: f.descAr.trim() || null,
+    description_en: f.descEn.trim() || null,
+    description_fr: f.descFr.trim() || null,
+    image: f.image || null,
+    sale_type: f.saleType,
+    requires_ring_size: f.requiresRingSize,
+    requires_bead_count: f.requiresBeadCount,
+    requires_bead_size: f.requiresBeadSize,
+    active: f.active,
+  };
+}
+
+function CategoryRuleFields({ lang, form, setForm, inputStyle }) {
+  const handleImage = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((f) => ({ ...f, image: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <>
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryImageLabel[lang]}</label>
+      <div className="flex items-center gap-3 mb-3">
+        {form.image ? (
+          <img src={form.image} alt="" className="w-14 h-14 rounded-sm object-cover" style={{ border: `1px solid ${THEME.surfaceLine}` }} />
+        ) : (
+          <div className="w-14 h-14 rounded-sm" style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}` }} />
+        )}
+        <label className="text-xs px-3 py-1.5 rounded-sm border cursor-pointer" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>
+          {T.addImages[lang]}
+          <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
+        </label>
+      </div>
+
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryDescLabel[lang]}</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+        <input value={form.descAr} onChange={(e) => setForm({ ...form, descAr: e.target.value })} placeholder={T.nameAr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+        <input value={form.descEn} onChange={(e) => setForm({ ...form, descEn: e.target.value })} placeholder={T.nameEn[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+        <input value={form.descFr} onChange={(e) => setForm({ ...form, descFr: e.target.value })} placeholder={T.nameFr[lang]} className="px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+      </div>
+
+      <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.saleTypeLabel[lang]}</label>
+      <select
+        value={form.saleType}
+        onChange={(e) => setForm({ ...form, saleType: e.target.value })}
+        className="w-full px-3 py-2 rounded-sm text-sm mb-3"
+        style={inputStyle}
+      >
+        <option value="piece" style={{ background: THEME.surface }}>{T.saleTypePiece[lang]}</option>
+        <option value="weight" style={{ background: THEME.surface }}>{T.saleTypeWeight[lang]}</option>
+      </select>
+
+      <div className="flex flex-col gap-2 mb-3">
+        <label className="flex items-center gap-2 text-sm" style={{ color: THEME.ivory }}>
+          <input type="checkbox" checked={form.requiresRingSize} onChange={(e) => setForm({ ...form, requiresRingSize: e.target.checked })} />
+          {T.requiresRingSizeLabel[lang]}
+        </label>
+        <label className="flex items-center gap-2 text-sm" style={{ color: THEME.ivory }}>
+          <input type="checkbox" checked={form.requiresBeadCount} onChange={(e) => setForm({ ...form, requiresBeadCount: e.target.checked })} />
+          {T.requiresBeadCountLabel[lang]}
+        </label>
+        <label className="flex items-center gap-2 text-sm" style={{ color: THEME.ivory }}>
+          <input type="checkbox" checked={form.requiresBeadSize} onChange={(e) => setForm({ ...form, requiresBeadSize: e.target.checked })} />
+          {T.requiresBeadSizeLabel[lang]}
+        </label>
+        <label className="flex items-center gap-2 text-sm" style={{ color: THEME.ivory }}>
+          <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+          {T.categoryActiveLabel[lang]}
+        </label>
+      </div>
+    </>
+  );
+}
+
+function AdminCategories({ lang, categories, setCategories, products }) {
+  const [form, setForm] = useState(EMPTY_CATEGORY_FORM);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nameAr: "", nameEn: "", nameFr: "" });
+  const [editForm, setEditForm] = useState(EMPTY_CATEGORY_FORM);
   const [confirmId, setConfirmId] = useState(null);
   const [msg, setMsg] = useState("");
   const [msgIsError, setMsgIsError] = useState(false);
   const [translating, setTranslating] = useState(false);
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
+  const sorted = categories.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   const translateName = async () => {
     const nameAr = form.nameAr.trim();
@@ -1795,7 +1965,15 @@ function AdminCategories({ lang, categories, setCategories }) {
     }
     let id = slugifyCategoryId(nameEn || nameAr);
     if (!id || categories.some((c) => c.id === id)) id = "cat-" + Date.now();
-    const row = { id, name_ar: nameAr || nameEn, name_en: nameEn || nameAr, name_fr: nameFr || nameEn || nameAr };
+    const maxSort = categories.reduce((m, c) => Math.max(m, c.sortOrder ?? 0), 0);
+    const row = {
+      id,
+      ...categoryFormToPatch(form),
+      name_ar: nameAr || nameEn,
+      name_en: nameEn || nameAr,
+      name_fr: nameFr || nameEn || nameAr,
+      sort_order: maxSort + 10,
+    };
     const { error } = await supabase.from("categories").insert(row);
     if (error) {
       setMsgIsError(true);
@@ -1803,14 +1981,23 @@ function AdminCategories({ lang, categories, setCategories }) {
       return;
     }
     setCategories([...categories, categoryRowToApp(row)]);
-    setForm({ nameAr: "", nameEn: "", nameFr: "" });
+    setForm(EMPTY_CATEGORY_FORM);
     setMsgIsError(false);
     setMsg(T.categoryAdded[lang]);
   };
 
   const startEdit = (c) => {
     setEditingId(c.id);
-    setEditForm({ nameAr: c.name.ar, nameEn: c.name.en, nameFr: c.name.fr });
+    setEditForm({
+      nameAr: c.name.ar, nameEn: c.name.en, nameFr: c.name.fr,
+      descAr: c.description?.ar || "", descEn: c.description?.en || "", descFr: c.description?.fr || "",
+      image: c.image || null,
+      saleType: c.saleType || "piece",
+      requiresRingSize: !!c.requiresRingSize,
+      requiresBeadCount: !!c.requiresBeadCount,
+      requiresBeadSize: !!c.requiresBeadSize,
+      active: c.active !== false,
+    });
   };
 
   const saveEdit = async (id) => {
@@ -1818,22 +2005,26 @@ function AdminCategories({ lang, categories, setCategories }) {
     const nameEn = editForm.nameEn.trim();
     const nameFr = editForm.nameFr.trim();
     if (!nameAr && !nameEn) return;
-    const { error } = await supabase
-      .from("categories")
-      .update({ name_ar: nameAr, name_en: nameEn, name_fr: nameFr })
-      .eq("id", id);
+    const patch = categoryFormToPatch(editForm);
+    const { error } = await supabase.from("categories").update(patch).eq("id", id);
     if (error) {
       setMsgIsError(true);
       setMsg(T.updateFailed[lang]);
       return;
     }
-    setCategories(categories.map((c) => (c.id === id ? { ...c, name: { ar: nameAr, en: nameEn, fr: nameFr } } : c)));
+    setCategories(categories.map((c) => (c.id === id ? categoryRowToApp({ id, ...patch }) : c)));
     setEditingId(null);
     setMsgIsError(false);
     setMsg(T.categoryUpdated[lang]);
   };
 
   const deleteCategory = async (id) => {
+    if (products.some((p) => p.cat === id)) {
+      setMsgIsError(true);
+      setMsg(T.categoryLinkedCannotDelete[lang]);
+      setConfirmId(null);
+      return;
+    }
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) {
       setMsgIsError(true);
@@ -1845,6 +2036,28 @@ function AdminCategories({ lang, categories, setCategories }) {
     setConfirmId(null);
     setMsgIsError(false);
     setMsg(T.categoryDeleted[lang]);
+  };
+
+  const move = async (id, direction) => {
+    const idx = sorted.findIndex((c) => c.id === id);
+    const swapIdx = idx + direction;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const a = sorted[idx];
+    const b = sorted[swapIdx];
+    const [{ error: err1 }, { error: err2 }] = await Promise.all([
+      supabase.from("categories").update({ sort_order: b.sortOrder ?? 0 }).eq("id", a.id),
+      supabase.from("categories").update({ sort_order: a.sortOrder ?? 0 }).eq("id", b.id),
+    ]);
+    if (err1 || err2) {
+      setMsgIsError(true);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
+    setCategories(categories.map((c) => {
+      if (c.id === a.id) return { ...c, sortOrder: b.sortOrder ?? 0 };
+      if (c.id === b.id) return { ...c, sortOrder: a.sortOrder ?? 0 };
+      return c;
+    }));
   };
 
   return (
@@ -1862,6 +2075,11 @@ function AdminCategories({ lang, categories, setCategories }) {
       >
         {translating ? T.translating[lang] : T.translateBtn[lang]}
       </button>
+
+      <div className="p-3 rounded-sm mb-3" style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}>
+        <CategoryRuleFields lang={lang} form={form} setForm={setForm} inputStyle={inputStyle} />
+      </div>
+
       <button onClick={addCategory} className="w-full mb-6 px-4 py-2 rounded-sm text-xs uppercase tracking-widest dr-btn-gold">
         {T.addCategory[lang]}
       </button>
@@ -1869,61 +2087,86 @@ function AdminCategories({ lang, categories, setCategories }) {
       {msg && <p className="text-sm mb-4 text-center" style={{ color: msgIsError ? "#E07A7A" : THEME.goldSoft }}>{msg}</p>}
 
       <div className="flex flex-col gap-2">
-        {categories.map((c) => (
+        {sorted.map((c, idx) => (
           <div
             key={c.id}
-            className="flex flex-wrap items-center gap-2 p-3 rounded-sm"
-            style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+            className="p-3 rounded-sm"
+            style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}`, opacity: c.active === false ? 0.55 : 1 }}
           >
             {editingId === c.id ? (
               <>
-                <input value={editForm.nameAr} onChange={(e) => setEditForm({ ...editForm, nameAr: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
-                <input value={editForm.nameEn} onChange={(e) => setEditForm({ ...editForm, nameEn: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
-                <input value={editForm.nameFr} onChange={(e) => setEditForm({ ...editForm, nameFr: e.target.value })} className="flex-1 min-w-[90px] px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
-                <button onClick={() => saveEdit(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
-                  {T.saveChanges[lang]}
-                </button>
-                <button
-                  onClick={() => setEditingId(null)}
-                  className="text-xs px-3 py-1.5 rounded-sm border"
-                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                >
-                  {T.confirmCancel[lang]}
-                </button>
-              </>
-            ) : confirmId === c.id ? (
-              <>
-                <span className="flex-1 text-sm" style={{ color: THEME.ivory }}>{c.name[lang]}</span>
-                <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.confirmDeleteCategory[lang]}</span>
-                <button onClick={() => deleteCategory(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
-                  {T.confirmYes[lang]}
-                </button>
-                <button
-                  onClick={() => setConfirmId(null)}
-                  className="text-xs px-3 py-1.5 rounded-sm border"
-                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                >
-                  {T.confirmCancel[lang]}
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                  <input value={editForm.nameAr} onChange={(e) => setEditForm({ ...editForm, nameAr: e.target.value })} placeholder={T.nameAr[lang]} className="px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                  <input value={editForm.nameEn} onChange={(e) => setEditForm({ ...editForm, nameEn: e.target.value })} placeholder={T.nameEn[lang]} className="px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                  <input value={editForm.nameFr} onChange={(e) => setEditForm({ ...editForm, nameFr: e.target.value })} placeholder={T.nameFr[lang]} className="px-3 py-1.5 rounded-sm text-sm" style={inputStyle} />
+                </div>
+                <CategoryRuleFields lang={lang} form={editForm} setForm={setEditForm} inputStyle={inputStyle} />
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => saveEdit(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
+                    {T.saveChanges[lang]}
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="text-xs px-3 py-1.5 rounded-sm border"
+                    style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                  >
+                    {T.confirmCancel[lang]}
+                  </button>
+                </div>
               </>
             ) : (
-              <>
-                <span className="flex-1 text-sm" style={{ color: THEME.ivory }}>{c.name[lang]}</span>
-                <button
-                  onClick={() => startEdit(c)}
-                  className="text-xs px-3 py-1.5 rounded-sm border"
-                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                >
-                  {T.editProduct[lang]}
+              <div className="flex flex-wrap items-center gap-2">
+                {c.image ? (
+                  <img src={c.image} alt="" className="w-10 h-10 rounded-sm object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-sm flex-shrink-0" style={{ background: THEME.bgSoft }} />
+                )}
+                <div className="flex-1 min-w-[100px]">
+                  <span className="text-sm block" style={{ color: THEME.ivory }}>{c.name[lang]}</span>
+                  <span className="text-[10px]" style={{ color: THEME.ivoryDim }}>
+                    {c.saleType === "weight" ? T.saleTypeWeight[lang] : T.saleTypePiece[lang]}
+                    {c.active === false ? ` · ${T.categoryActiveLabel[lang]}: ✕` : ""}
+                  </span>
+                </div>
+                <button onClick={() => move(c.id, -1)} disabled={idx === 0} className="text-xs px-2 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim, opacity: idx === 0 ? 0.4 : 1 }}>
+                  ↑
                 </button>
-                <button
-                  onClick={() => setConfirmId(c.id)}
-                  className="text-xs px-3 py-1.5 rounded-sm border"
-                  style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
-                >
-                  {T.deleteProduct[lang]}
+                <button onClick={() => move(c.id, 1)} disabled={idx === sorted.length - 1} className="text-xs px-2 py-1.5 rounded-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim, opacity: idx === sorted.length - 1 ? 0.4 : 1 }}>
+                  ↓
                 </button>
-              </>
+                {confirmId === c.id ? (
+                  <>
+                    <span className="text-xs" style={{ color: THEME.ivoryDim }}>{T.confirmDeleteCategory[lang]}</span>
+                    <button onClick={() => deleteCategory(c.id)} className="text-xs px-3 py-1.5 rounded-sm dr-btn-gold">
+                      {T.confirmYes[lang]}
+                    </button>
+                    <button
+                      onClick={() => setConfirmId(null)}
+                      className="text-xs px-3 py-1.5 rounded-sm border"
+                      style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                    >
+                      {T.confirmCancel[lang]}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => startEdit(c)}
+                      className="text-xs px-3 py-1.5 rounded-sm border"
+                      style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                    >
+                      {T.editProduct[lang]}
+                    </button>
+                    <button
+                      onClick={() => setConfirmId(c.id)}
+                      className="text-xs px-3 py-1.5 rounded-sm border"
+                      style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
+                    >
+                      {T.deleteProduct[lang]}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         ))}
@@ -2595,7 +2838,17 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
     goldKarat: product.goldKarat || 18,
     silverType: product.silverType || "male",
     weightGrams: product.weightGrams != null ? String(product.weightGrams) : "",
+    beadCount: product.beadCount != null ? String(product.beadCount) : "",
+    beadSize: product.beadSize || "",
   });
+
+  // قواعد التصنيف المختار — نفس منطق نموذج إضافة المنتج، بس هون لا نلقّن طريقة البيع عند التحميل
+  // الأولي (نحترم القيمة الحالية للمنتج)، فقط عند تغيير التصنيف فعليًا أثناء التعديل
+  const selectedCategory = categories.find((c) => c.id === form.cat);
+  const onCategoryChange = (catId) => {
+    const cat = categories.find((c) => c.id === catId);
+    setForm((f) => ({ ...f, cat: catId, saleMethod: cat?.saleType || f.saleMethod }));
+  };
 
   const toggleCountry = (id) =>
     setForm((f) => ({
@@ -2681,6 +2934,8 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       metalType: isWeightSale ? form.metalType : null,
       goldKarat: isWeightSale && form.metalType === "gold" ? Number(form.goldKarat) : null,
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
+      beadCount: selectedCategory?.requiresBeadCount && form.beadCount ? Number(form.beadCount) : null,
+      beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
     });
     if (!ok) setFormError(T.updateFailed[lang]);
   };
@@ -2754,7 +3009,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.categoryLabel[lang]}</label>
-            <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
+            <select value={form.cat} onChange={(e) => onCategoryChange(e.target.value)} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle}>
               {categories.map((c) => (
                 <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.name[lang]}</option>
               ))}
@@ -2820,10 +3075,29 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
           </div>
         )}
 
-        <div className="mb-3">
-          <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.sizesLabel[lang]}</label>
-          <input type="text" value={form.sizesText} onChange={(e) => setForm({ ...form, sizesText: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
-        </div>
+        {selectedCategory?.requiresRingSize && (
+          <div className="mb-3">
+            <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.sizesLabel[lang]}</label>
+            <input type="text" value={form.sizesText} onChange={(e) => setForm({ ...form, sizesText: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+          </div>
+        )}
+
+        {(selectedCategory?.requiresBeadCount || selectedCategory?.requiresBeadSize) && (
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            {selectedCategory?.requiresBeadCount && (
+              <div>
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.beadCountLabel[lang]}</label>
+                <input type="number" value={form.beadCount} onChange={(e) => setForm({ ...form, beadCount: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+              </div>
+            )}
+            {selectedCategory?.requiresBeadSize && (
+              <div>
+                <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.beadSizeLabel[lang]}</label>
+                <input type="text" placeholder={T.beadSizePlaceholder[lang]} value={form.beadSize} onChange={(e) => setForm({ ...form, beadSize: e.target.value })} className="w-full px-3 py-2 rounded-sm text-sm" style={inputStyle} />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mb-3">
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.repLabel[lang]} *</label>
@@ -4752,7 +5026,7 @@ export default function JewelryStore() {
             <AdminReps lang={lang} reps={reps} setReps={setReps} />
           )}
           {adminTab === "categories" && (
-            <AdminCategories lang={lang} categories={categories} setCategories={setCategories} />
+            <AdminCategories lang={lang} categories={categories} setCategories={setCategories} products={products} />
           )}
           {adminTab === "content" && (
             <AdminSiteContent lang={lang} heroTitle={heroTitle} setHeroTitle={setHeroTitle} storeInfo={storeInfo} setStoreInfo={setStoreInfo} />
@@ -5049,7 +5323,7 @@ export default function JewelryStore() {
           >
             {T.all[lang]}
           </button>
-          {categories.map((c) => (
+          {categories.filter((c) => c.active !== false).map((c) => (
             <button
               key={c.id}
               onClick={() => setCategory(c.id)}
@@ -5170,6 +5444,13 @@ export default function JewelryStore() {
             {selected.saleMethod === "weight" && selected.weightGrams > 0 && (
               <p className="text-xs text-center mt-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
                 {T.weightGramsLabel[lang]}: {selected.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(selected, metalGramPrices) || 0)}
+              </p>
+            )}
+            {(selected.beadCount || selected.beadSize) && (
+              <p className="text-xs text-center mt-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
+                {selected.beadCount ? `${T.beadCountLabel[lang]}: ${selected.beadCount}` : ""}
+                {selected.beadCount && selected.beadSize ? " · " : ""}
+                {selected.beadSize ? `${T.beadSizeLabel[lang]}: ${selected.beadSize}` : ""}
               </p>
             )}
 
