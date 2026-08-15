@@ -5799,7 +5799,7 @@ export default function JewelryStore() {
                       status: "pending",
                       items: selectedCart.map((i) => {
                         const live = liveProduct(i);
-                        return { id: i.id, qty: i.qty, size: i.size, price: live.price, cost: live.cost || 0, rep: i.rep || "", size_note: i.sizeNote || "" };
+                        return { id: i.id, qty: i.qty, size: i.size, sizeNote: i.sizeNote || "", price: live.price, cost: live.cost || 0, rep: i.rep || "" };
                       }),
                     };
 
@@ -5809,7 +5809,7 @@ export default function JewelryStore() {
                       p_payment: newOrder.payment,
                       p_customer_name: newOrder.customerName,
                       p_customer_phone: newOrder.customerPhone,
-                      p_items: newOrder.items,
+                      p_items: newOrder.items.map((i) => ({ id: i.id, qty: i.qty, size: i.size, price: i.price, cost: i.cost, rep: i.rep, size_note: i.sizeNote })),
                     });
                     if (error) {
                       setStockError(true);
