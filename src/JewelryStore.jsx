@@ -717,6 +717,7 @@ function orderRowToApp(row, items) {
       id: it.product_id,
       qty: it.qty,
       size: it.size,
+      sizeNote: it.size_note || "",
       price: Number(it.price) || 0,
       cost: Number(it.cost) || 0,
       rep: it.rep || "",
@@ -900,6 +901,9 @@ const T = {
   micNotSupported: { ar: "التسجيل الصوتي غير مدعوم بهذا المتصفح", en: "Voice input is not supported in this browser", fr: "La saisie vocale n'est pas prise en charge par ce navigateur" },
   sizeLabel: { ar: "المقاس", en: "Size", fr: "Taille" },
   selectSize: { ar: "يرجى اختيار المقاس أولًا", en: "Please select a size first", fr: "Veuillez d'abord choisir une taille" },
+  requestDifferentSizeLabel: { ar: "هل تريد مقاسًا مختلفًا؟", en: "Would you like a different size?", fr: "Souhaitez-vous une taille différente ?" },
+  sizeRequestPlaceholder: { ar: "اكتب المقاس الذي تريده أو ملاحظة خاصة (اختياري)", en: "Write the size you'd like or a special note (optional)", fr: "Indiquez la taille souhaitée ou une note spéciale (facultatif)" },
+  sizeRequestNoteLabel: { ar: "طلب مقاس خاص", en: "Special Size Request", fr: "Demande de Taille Spéciale" },
   sizeStandard: { ar: "مقاس واحد", en: "One Size", fr: "Taille Unique" },
   sizesLabel: { ar: "المقاسات المتوفرة (افصل بينها بفاصلة)", en: "Available Sizes (comma-separated)", fr: "Tailles Disponibles (séparées par une virgule)" },
   repLabel: { ar: "المندوب", en: "Sales Rep", fr: "Représentant" },
@@ -3698,6 +3702,11 @@ function AdminSales({ lang, orders, products, customers, storeInfo, fmtPrice, on
                         <p className="text-xs" style={{ color: THEME.ivoryDim }}>
                           {it.size ? `${it.size} · ` : ""}{T.colQty[lang]}: {it.qty} · {T.unitPrice[lang]}: {fmtPrice(unitPrice)}
                         </p>
+                        {it.sizeNote && (
+                          <p className="text-xs mt-0.5" style={{ color: THEME.goldSoft }}>
+                            {T.sizeRequestNoteLabel[lang]}: {it.sizeNote}
+                          </p>
+                        )}
                       </div>
                       <span className="text-sm" style={{ color: THEME.ivory }}>{fmtPrice(unitPrice * it.qty)}</span>
                     </div>
@@ -4438,6 +4447,11 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                         <p className="text-xs" style={{ color: THEME.ivoryDim }}>
                           {it.size ? `${it.size} · ` : ""}{T.colQty[lang]}: {it.qty} · {T.unitPrice[lang]}: {fmtPrice(unitPrice)}
                         </p>
+                        {it.sizeNote && (
+                          <p className="text-xs mt-0.5" style={{ color: THEME.goldSoft }}>
+                            {T.sizeRequestNoteLabel[lang]}: {it.sizeNote}
+                          </p>
+                        )}
                       </div>
                       <span className="text-sm" style={{ color: THEME.ivory }}>{fmtPrice(unitPrice * it.qty)}</span>
                     </div>
@@ -4475,6 +4489,7 @@ export default function JewelryStore() {
   const [selected, setSelected] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(null);
+  const [sizeRequest, setSizeRequest] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [announceIndex, setAnnounceIndex] = useState(0);
   const [customDesignOpen, setCustomDesignOpen] = useState(false);
@@ -4803,6 +4818,7 @@ export default function JewelryStore() {
     setSelected(product);
     setModalImgIndex(0);
     setSelectedSize(null);
+    setSizeRequest("");
     trackView(product.id);
   };
 
@@ -4849,16 +4865,17 @@ export default function JewelryStore() {
     return `${val.toLocaleString(isRTL ? "ar-SA" : lang === "fr" ? "fr-FR" : "en-US")} ${cur.symbol}`;
   };
 
-  const addToCart = (product, size, qty = 1) => {
+  const addToCart = (product, size, qty = 1, sizeNote = "") => {
     const finalSize = size || (product.sizes && product.sizes[0]) || null;
+    const finalSizeNote = sizeNote.trim() || null;
     setCart((prev) => {
       const alreadyInCart = prev.filter((i) => i.id === product.id).reduce((s, i) => s + i.qty, 0);
       const available = Math.max(0, (product.stock ?? 0) - alreadyInCart);
       const addQty = Math.min(qty, available);
       if (addQty <= 0) return prev;
       const found = prev.find((i) => i.id === product.id && i.size === finalSize);
-      if (found) return prev.map((i) => (i.id === product.id && i.size === finalSize ? { ...i, qty: i.qty + addQty } : i));
-      return [...prev, { ...product, size: finalSize, qty: addQty }];
+      if (found) return prev.map((i) => (i.id === product.id && i.size === finalSize ? { ...i, qty: i.qty + addQty, sizeNote: finalSizeNote || i.sizeNote } : i));
+      return [...prev, { ...product, size: finalSize, qty: addQty, sizeNote: finalSizeNote }];
     });
   };
 
@@ -5476,12 +5493,33 @@ export default function JewelryStore() {
               </div>
             )}
 
+            {(() => {
+              const cat = categories.find((c) => c.id === selected.cat);
+              const canRequestSize = cat?.requiresRingSize && (selected.countries || []).includes("lebanon");
+              if (!canRequestSize) return null;
+              return (
+                <div className="mt-4">
+                  <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.requestDifferentSizeLabel[lang]}</p>
+                  <input
+                    type="text"
+                    value={sizeRequest}
+                    onChange={(e) => setSizeRequest(e.target.value)}
+                    placeholder={T.sizeRequestPlaceholder[lang]}
+                    maxLength={200}
+                    className="w-full px-3 py-2 rounded-sm text-sm"
+                    style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                  />
+                </div>
+              );
+            })()}
+
             <button
               onClick={() => {
                 if (selected.sizes && selected.sizes.length > 1 && !selectedSize) return;
-                addToCart(selected, selectedSize || (selected.sizes && selected.sizes[0]));
+                addToCart(selected, selectedSize || (selected.sizes && selected.sizes[0]), 1, sizeRequest);
                 setSelected(null);
                 setSelectedSize(null);
+                setSizeRequest("");
               }}
               className="w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
               style={{ opacity: selected.sizes && selected.sizes.length > 1 && !selectedSize ? 0.6 : 1 }}
@@ -5761,7 +5799,7 @@ export default function JewelryStore() {
                       status: "pending",
                       items: selectedCart.map((i) => {
                         const live = liveProduct(i);
-                        return { id: i.id, qty: i.qty, size: i.size, price: live.price, cost: live.cost || 0, rep: i.rep || "" };
+                        return { id: i.id, qty: i.qty, size: i.size, price: live.price, cost: live.cost || 0, rep: i.rep || "", size_note: i.sizeNote || "" };
                       }),
                     };
 
