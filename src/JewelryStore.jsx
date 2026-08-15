@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail, Contact } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
+import { downloadInvoicePdf, formatInvoiceNumber } from "./invoicePdf";
 
 // دومين مخصص للإدارة فقط — المتجر العام ما بيعرض أي رابط أو مدخل للوحة الإدارة إطلاقًا
 const ADMIN_HOSTNAMES = ["machhadjewelry.site", "www.machhadjewelry.site"];
@@ -673,7 +674,9 @@ function productAppToRow(p) {
 function orderRowToApp(row, items) {
   return {
     id: row.id,
+    invoiceNumber: row.invoice_number ?? null,
     date: row.order_date,
+    createdAt: row.created_at,
     country: row.country,
     payment: row.payment,
     customerName: row.customer_name || "",
@@ -936,6 +939,11 @@ const T = {
   heroTitleFrLabel: { ar: "الجملة (فرنسي)", en: "Tagline (French)", fr: "Slogan (Français)" },
   saveContent: { ar: "حفظ الجملة", en: "Save Tagline", fr: "Enregistrer le Slogan" },
   contentSaved: { ar: "تم حفظ الجملة", en: "Tagline saved", fr: "Slogan enregistré" },
+  storeContactInfoLabel: { ar: "معلومات تواصل المتجر (تظهر على الفاتورة)", en: "Store Contact Info (shown on invoices)", fr: "Coordonnées du Magasin (affichées sur les factures)" },
+  storePhoneLabel: { ar: "هاتف المتجر", en: "Store Phone", fr: "Téléphone du Magasin" },
+  storeAddressLabel: { ar: "عنوان المتجر", en: "Store Address", fr: "Adresse du Magasin" },
+  saveStoreInfo: { ar: "حفظ معلومات التواصل", en: "Save Contact Info", fr: "Enregistrer les Coordonnées" },
+  storeInfoSaved: { ar: "تم الحفظ", en: "Saved", fr: "Enregistré" },
   tabInvoiceRecipients: { ar: "إرسال الفواتير", en: "Invoice Recipients", fr: "Destinataires des Factures" },
   invoiceRecipientsIntro: { ar: "أي بريد إلكتروني تضيفه هون بياخد نسخة من فاتورة PDF عند كل طلب جديد", en: "Any email added here receives a PDF invoice copy for every new order", fr: "Chaque e-mail ajouté ici reçoit une copie de la facture PDF pour chaque nouvelle commande" },
   emailPlaceholder: { ar: "بريد إلكتروني", en: "Email address", fr: "Adresse e-mail" },
@@ -2289,10 +2297,14 @@ function AdminGoldSilverRates({ lang, metalGramPrices, setMetalGramPrices }) {
 }
 
 // تعديل يدوي لجملة الواجهة الرئيسية (تحت شعار الموقع) — بدون الحاجة لأي تعديل بالكود لاحقًا
-function AdminSiteContent({ lang, heroTitle, setHeroTitle }) {
+function AdminSiteContent({ lang, heroTitle, setHeroTitle, storeInfo, setStoreInfo }) {
   const [draft, setDraft] = useState({ ar: heroTitle.ar, en: heroTitle.en, fr: heroTitle.fr });
   const [msg, setMsg] = useState("");
   const [msgIsError, setMsgIsError] = useState(false);
+
+  const [storeDraft, setStoreDraft] = useState({ phone: storeInfo.phone, address: storeInfo.address });
+  const [storeMsg, setStoreMsg] = useState("");
+  const [storeMsgIsError, setStoreMsgIsError] = useState(false);
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
 
@@ -2312,6 +2324,22 @@ function AdminSiteContent({ lang, heroTitle, setHeroTitle }) {
     setMsg(T.contentSaved[lang]);
   };
 
+  const saveStoreInfo = async () => {
+    const next = { phone: storeDraft.phone.trim(), address: storeDraft.address.trim() };
+    const { error } = await supabase
+      .from("site_settings")
+      .update({ store_phone: next.phone, store_address: next.address, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+    if (error) {
+      setStoreMsgIsError(true);
+      setStoreMsg(T.updateFailed[lang]);
+      return;
+    }
+    setStoreInfo(next);
+    setStoreMsgIsError(false);
+    setStoreMsg(T.storeInfoSaved[lang]);
+  };
+
   return (
     <div className="max-w-md mx-auto">
       <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.heroTitleArLabel[lang]}</label>
@@ -2327,6 +2355,21 @@ function AdminSiteContent({ lang, heroTitle, setHeroTitle }) {
       <button onClick={save} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">
         {T.saveContent[lang]}
       </button>
+
+      <div className="mt-8 pt-6" style={{ borderTop: `1px solid ${THEME.surfaceLine}` }}>
+        <p className="text-xs mb-3" style={{ color: THEME.ivoryDim }}>{T.storeContactInfoLabel[lang]}</p>
+
+        <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.storePhoneLabel[lang]}</label>
+        <input value={storeDraft.phone} onChange={(e) => setStoreDraft((d) => ({ ...d, phone: e.target.value }))} className="w-full px-3 py-2 rounded-sm text-sm mb-3" style={inputStyle} />
+
+        <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.storeAddressLabel[lang]}</label>
+        <input value={storeDraft.address} onChange={(e) => setStoreDraft((d) => ({ ...d, address: e.target.value }))} className="w-full px-3 py-2 rounded-sm text-sm mb-6" style={inputStyle} />
+
+        {storeMsg && <p className="text-sm mb-3" style={{ color: storeMsgIsError ? "#E07A7A" : THEME.goldSoft }}>{storeMsg}</p>}
+        <button onClick={saveStoreInfo} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">
+          {T.saveStoreInfo[lang]}
+        </button>
+      </div>
     </div>
   );
 }
@@ -3159,7 +3202,7 @@ function orderStatusColor(status) {
   }
 }
 
-function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
+function AdminSales({ lang, orders, products, customers, storeInfo, fmtPrice, onStatusChange }) {
   const [filterCountry, setFilterCountry] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [invoiceOrder, setInvoiceOrder] = useState(null);
@@ -3179,6 +3222,26 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
   const paymentLabel = (id) => {
     const m = PAYMENT_METHODS.find((m) => m.id === id);
     return m ? m[lang] : id;
+  };
+
+  // النصوص بالفاتورة نفسها (PDF) دايمًا إنجليزي بغض النظر عن لغة الواجهة الحالية — راجع الملاحظة
+  // بأعلى supabase/functions/_shared/invoiceTemplate.js لسبب هالقرار (محدودية jsPDF مع العربي)
+  const countryLabelEn = (id) => COUNTRIES.find((c) => c.id === id)?.en || id;
+  const paymentLabelEn = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.en || id;
+
+  const downloadInvoice = (order) => {
+    const customer = customers.find((c) => c.id === order.customerId);
+    downloadInvoicePdf({
+      order,
+      products,
+      storeInfo,
+      logoSrc: LOGO_SRC,
+      countryLabel: countryLabelEn(order.country),
+      paymentLabel: paymentLabelEn(order.payment),
+      statusLabel: T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"].en,
+      statusColor: orderStatusColor(order.status),
+      customerEmail: customer?.email || null,
+    });
   };
 
   const orderTotal = (order) =>
@@ -3325,6 +3388,9 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
                 <p style={{ fontFamily: "'Cormorant Garamond', serif", color: THEME.goldSoft, fontSize: "1.3rem" }}>
                   {T.brand[lang]} — {T.invoiceTitle[lang]}
                 </p>
+                <p className="text-xs mt-1" style={{ color: THEME.goldSoft }}>
+                  {formatInvoiceNumber(invoiceOrder.invoiceNumber)}
+                </p>
                 <p className="text-xs mt-1" style={{ color: THEME.ivoryDim }}>
                   {T.colOrderId[lang]}: {invoiceOrder.id.replace("S-", "")} · {invoiceOrder.date}
                 </p>
@@ -3372,7 +3438,7 @@ function AdminSales({ lang, orders, products, fmtPrice, onStatusChange }) {
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={() => downloadInvoice(invoiceOrder)}
               className="dr-no-print w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
             >
               {T.printInvoice[lang]}
@@ -3734,7 +3800,7 @@ function resizeImageToDataUrl(file, maxDim) {
   });
 }
 
-function CustomerAccountModal({ lang, session, customerProfile, orders, products, fmtPrice, onClose, onAuthed, onProfileUpdate }) {
+function CustomerAccountModal({ lang, session, customerProfile, orders, products, storeInfo, fmtPrice, onClose, onAuthed, onProfileUpdate }) {
   const [view, setView] = useState(session ? "orders" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -3779,6 +3845,25 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
   const paymentLabel = (id) => {
     const m = PAYMENT_METHODS.find((m) => m.id === id);
     return m ? m[lang] : id;
+  };
+
+  // النصوص بالفاتورة نفسها (PDF) دايمًا إنجليزي بغض النظر عن لغة الواجهة الحالية — راجع الملاحظة
+  // بأعلى supabase/functions/_shared/invoiceTemplate.js لسبب هالقرار (محدودية jsPDF مع العربي)
+  const countryLabelEn = (id) => COUNTRIES.find((c) => c.id === id)?.en || id;
+  const paymentLabelEn = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.en || id;
+
+  const downloadInvoice = (order) => {
+    downloadInvoicePdf({
+      order,
+      products,
+      storeInfo,
+      logoSrc: LOGO_SRC,
+      countryLabel: countryLabelEn(order.country),
+      paymentLabel: paymentLabelEn(order.payment),
+      statusLabel: T[ORDER_STATUS_LABEL_KEYS[order.status] || "statusPending"].en,
+      statusColor: orderStatusColor(order.status),
+      customerEmail: customerProfile?.email || null,
+    });
   };
 
   useEffect(() => {
@@ -4040,6 +4125,9 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
                 <p style={{ fontFamily: "'Cormorant Garamond', serif", color: THEME.goldSoft, fontSize: "1.3rem" }}>
                   {T.brand[lang]} — {T.invoiceTitle[lang]}
                 </p>
+                <p className="text-xs mt-1" style={{ color: THEME.goldSoft }}>
+                  {formatInvoiceNumber(invoiceOrder.invoiceNumber)}
+                </p>
                 <p className="text-xs mt-1" style={{ color: THEME.ivoryDim }}>
                   {T.colOrderId[lang]}: {invoiceOrder.id.replace("S-", "")} · {invoiceOrder.date}
                 </p>
@@ -4090,7 +4178,7 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={() => downloadInvoice(invoiceOrder)}
               className="dr-no-print w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
             >
               {T.printInvoice[lang]}
@@ -4130,6 +4218,7 @@ export default function JewelryStore() {
   const [rawProducts, setRawProducts] = useState([]);
   const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
   const [heroTitle, setHeroTitle] = useState({ ar: T.heroTitle.ar, en: T.heroTitle.en, fr: T.heroTitle.fr });
+  const [storeInfo, setStoreInfo] = useState({ phone: "", address: "" });
   const [invoiceRecipients, setInvoiceRecipients] = useState([]);
   const [customers, setCustomers] = useState([]);
   // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
@@ -4346,6 +4435,10 @@ export default function JewelryStore() {
           ar: siteSettingsRes.data.hero_title_ar || T.heroTitle.ar,
           en: siteSettingsRes.data.hero_title_en || T.heroTitle.en,
           fr: siteSettingsRes.data.hero_title_fr || T.heroTitle.fr,
+        });
+        setStoreInfo({
+          phone: siteSettingsRes.data.store_phone || "",
+          address: siteSettingsRes.data.store_address || "",
         });
       }
       if (ordersRes.data && itemsRes.data) {
@@ -4629,6 +4722,8 @@ export default function JewelryStore() {
               lang={lang}
               orders={orders}
               products={products}
+              customers={customers}
+              storeInfo={storeInfo}
               fmtPrice={fmtPrice}
               onStatusChange={async (orderId, status) => {
                 const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
@@ -4660,7 +4755,7 @@ export default function JewelryStore() {
             <AdminCategories lang={lang} categories={categories} setCategories={setCategories} />
           )}
           {adminTab === "content" && (
-            <AdminSiteContent lang={lang} heroTitle={heroTitle} setHeroTitle={setHeroTitle} />
+            <AdminSiteContent lang={lang} heroTitle={heroTitle} setHeroTitle={setHeroTitle} storeInfo={storeInfo} setStoreInfo={setStoreInfo} />
           )}
           {adminTab === "invoices" && (
             <AdminInvoiceRecipients lang={lang} invoiceRecipients={invoiceRecipients} setInvoiceRecipients={setInvoiceRecipients} />
@@ -5142,6 +5237,7 @@ export default function JewelryStore() {
           customerProfile={customerProfile}
           orders={orders}
           products={products}
+          storeInfo={storeInfo}
           fmtPrice={fmtPrice}
           onClose={() => setCustomerAuthOpen(false)}
           onAuthed={(profile) => setCustomerProfile(profile)}
@@ -5388,7 +5484,7 @@ export default function JewelryStore() {
                       }),
                     };
 
-                    const { error } = await supabase.rpc("place_order", {
+                    const { data: invoiceNumber, error } = await supabase.rpc("place_order", {
                       p_id: newOrder.id,
                       p_country: newOrder.country,
                       p_payment: newOrder.payment,
@@ -5400,6 +5496,7 @@ export default function JewelryStore() {
                       setStockError(true);
                       return;
                     }
+                    newOrder.invoiceNumber = invoiceNumber ?? null;
 
                     setRawProducts((prev) =>
                       prev.map((p) => {
