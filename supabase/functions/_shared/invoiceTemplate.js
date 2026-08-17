@@ -218,7 +218,7 @@ function drawTableHeader(doc, y, cols) {
 }
 
 // سطر تفاصيل إضافي تحت اسم الصنف — فقط للحقول الموجودة فعليًا بالصنف (وزن/عيار ذهب أو نوع فضة،
-// ومقاس لو الصنف له مقاس)، ما بتظهر أي خانة فاضية
+// مقاس لو الصنف له مقاس، وعدد/مقاس حبات المسبحة لو موجودين)، ما بتظهر أي خانة فاضية
 function buildMetaLine(item) {
   const parts = [];
   if (item.saleMethod === "weight") {
@@ -229,6 +229,8 @@ function buildMetaLine(item) {
     }
   }
   if (item.size) parts.push(`Size: ${item.size}`);
+  if (item.beadCount) parts.push(`Beads: ${item.beadCount}`);
+  if (item.beadSize) parts.push(`Bead Size: ${item.beadSize}`);
   return parts.join("   ·   ");
 }
 
@@ -246,13 +248,22 @@ function measureRow(doc, item, cols) {
 
   const meta = buildMetaLine(item);
 
+  // ملاحظة مقاس خاص طلبها الزبون عند الدفع (فقط لمنتجات لبنان اللي بتسمح بتعديل المقاس) — نص حر
+  // ممكن يطول، فمنسمح له بسطرين كحد أقصى بعكس سطر الـ meta المضبوط
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  const noteLines = item.sizeNote
+    ? doc.splitTextToSize(`Note: ${item.sizeNote}`, nameWidth).slice(0, 2)
+    : [];
+
   let textH = 14 + nameLines.length * 11.5;
   if (descLines.length) textH += 11;
   if (meta) textH += 11;
+  if (noteLines.length) textH += 11 * noteLines.length;
   textH += 10;
 
   const imageBoxH = 58;
-  return { height: Math.max(imageBoxH + 14, textH), nameLines, descLines, meta };
+  return { height: Math.max(imageBoxH + 14, textH), nameLines, descLines, meta, noteLines };
 }
 
 function drawRow(doc, y, measured, item, cols, striped) {
@@ -286,6 +297,13 @@ function drawRow(doc, y, measured, item, cols, striped) {
     doc.setFontSize(8);
     setText(doc, COLORS.accent);
     doc.text(measured.meta, textX, ty, { align: "left" });
+    ty += 11;
+  }
+  if (measured.noteLines.length) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    setText(doc, COLORS.accent);
+    measured.noteLines.forEach((line) => { doc.text(line, textX, ty, { align: "left" }); ty += 11; });
   }
 
   const midY = y + height / 2 + 3;
@@ -358,8 +376,8 @@ function finalizeFooters(doc, storeInfo, contentLeft, contentRight, pageH) {
 // طرف المستدعي (كل بيئة عندها طريقة استيراد jsPDF مختلفة). البيانات المطلوبة:
 //   order: { invoiceLabel, orderId, orderDate, countryLabel, paymentLabel, customerName,
 //            customerPhone, customerEmail, statusLabel, statusColor }
-//   items: [{ name, description, sku, qty, unitPrice, image, size, saleMethod, weightGrams,
-//             metalType, goldKarat, silverType }]
+//   items: [{ name, description, sku, qty, unitPrice, image, size, sizeNote, saleMethod,
+//             weightGrams, metalType, goldKarat, silverType, beadCount, beadSize }]
 //   storeInfo: { phone, address }
 //   logoSrc: نص Data URI للشعار
 export function renderInvoiceDoc(doc, { order, items, storeInfo, logoSrc }) {

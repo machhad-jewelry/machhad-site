@@ -21,11 +21,14 @@ function buildLineItems(order, products) {
       unitPrice: it.price,
       image: product?.images?.[0] || null,
       size: it.size || null,
+      sizeNote: it.sizeNote || null,
       saleMethod: product?.saleMethod || "piece",
       weightGrams: product?.weightGrams || null,
       metalType: product?.metalType || null,
       goldKarat: product?.goldKarat || null,
       silverType: product?.silverType || null,
+      beadCount: product?.beadCount || null,
+      beadSize: product?.beadSize || null,
     };
   });
 }

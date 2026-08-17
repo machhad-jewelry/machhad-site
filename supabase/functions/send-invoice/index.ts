@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
 
     const { data: items } = await supabaseAdmin
       .from("order_items")
-      .select("id, order_id, product_id, qty, size, price")
+      .select("id, order_id, product_id, qty, size, price, size_note")
       .eq("order_id", orderId);
 
     const productIds = [...new Set((items ?? []).map((it: any) => it.product_id).filter(Boolean))];
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     const { data: productRows } = productIds.length
       ? await supabaseAdmin
           .from("products")
-          .select("id, name_en, name_ar, desc_en, mat_en, barcode, images, sale_method, weight_grams, metal_type, gold_karat, silver_type")
+          .select("id, name_en, name_ar, desc_en, mat_en, barcode, images, sale_method, weight_grams, metal_type, gold_karat, silver_type, bead_count, bead_size")
           .in("id", productIds)
       : { data: [] as any[] };
     const productsById: Record<string, any> = {};
@@ -146,11 +146,14 @@ Deno.serve(async (req) => {
         // (لا حصة موارد مشددة هناك) — فرق مقصود ومبرر تقنيًا، مو تصميم مختلف عمدًا.
         image: null,
         size: it.size || null,
+        sizeNote: it.size_note || null,
         saleMethod: product.sale_method || "piece",
         weightGrams: product.weight_grams != null ? Number(product.weight_grams) : null,
         metalType: product.metal_type || null,
         goldKarat: product.gold_karat != null ? Number(product.gold_karat) : null,
         silverType: product.silver_type || null,
+        beadCount: product.bead_count != null ? Number(product.bead_count) : null,
+        beadSize: product.bead_size || null,
       };
     });
 
