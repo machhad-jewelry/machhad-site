@@ -1060,6 +1060,11 @@ const T = {
     en: "The requested quantity is no longer fully available, please update your cart",
     fr: "La quantité demandée n'est plus entièrement disponible, veuillez modifier votre panier",
   },
+  orderRateLimited: {
+    ar: "يرجى الانتظار قليلًا قبل إنشاء طلب جديد",
+    en: "Please wait a moment before placing another order",
+    fr: "Veuillez patienter un instant avant de passer une autre commande",
+  },
   tabRates: { ar: "أسعار الصرف", en: "Exchange Rates", fr: "Taux de Change" },
   deleteProduct: { ar: "حذف", en: "Delete", fr: "Supprimer" },
   confirmDeleteProduct: { ar: "احذف نهائيًا؟", en: "Delete permanently?", fr: "Supprimer définitivement ?" },
@@ -4527,6 +4532,7 @@ export default function JewelryStore() {
   const [customerInfoError, setCustomerInfoError] = useState(false);
   const [stockError, setStockError] = useState(false);
   const [countryError, setCountryError] = useState(false);
+  const [rateLimitError, setRateLimitError] = useState(false);
   const [adminView, setAdminView] = useState(IS_ADMIN_DOMAIN ? "login" : null); // null | "login" | "dashboard"
   const [adminTab, setAdminTab] = useState("add");
   const [rates, setRates] = useState(DEFAULT_RATES);
@@ -5733,7 +5739,7 @@ export default function JewelryStore() {
                     {T.orderPlaced[lang]} {PAYMENT_METHODS.find((m) => m.id === payment)?.[lang]}.
                   </p>
                   <button
-                    onClick={() => { setOrderPlaced(false); setCartOpen(false); setCustomerName(""); setCustomerPhone(""); setStockError(false); setCountryError(false); }}
+                    onClick={() => { setOrderPlaced(false); setCartOpen(false); setCustomerName(""); setCustomerPhone(""); setStockError(false); setCountryError(false); setRateLimitError(false); }}
                     className="mt-5 px-6 py-2 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
                   >
                     {T.backToShop[lang]}
@@ -5753,6 +5759,9 @@ export default function JewelryStore() {
                 )}
                 {stockError && (
                   <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.insufficientStock[lang]}</p>
+                )}
+                {rateLimitError && (
+                  <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.orderRateLimited[lang]}</p>
                 )}
                 {countryError && (
                   <p className="text-xs mb-3 text-center" style={{ color: "#E07A7A" }}>{T.countryMismatch[lang]}</p>
@@ -5812,7 +5821,11 @@ export default function JewelryStore() {
                       p_items: newOrder.items.map((i) => ({ id: i.id, qty: i.qty, size: i.size, price: i.price, cost: i.cost, rep: i.rep, size_note: i.sizeNote })),
                     });
                     if (error) {
-                      setStockError(true);
+                      if (error.message && error.message.includes("rate_limited")) {
+                        setRateLimitError(true);
+                      } else {
+                        setStockError(true);
+                      }
                       return;
                     }
                     newOrder.invoiceNumber = invoiceNumber ?? null;
@@ -5827,6 +5840,7 @@ export default function JewelryStore() {
                     setCart((prev) => prev.filter((i) => !selectedCartKeys.includes(cartKey(i))));
                     setStockError(false);
                     setCountryError(false);
+                    setRateLimitError(false);
                     setOrderPlaced(true);
 
                     // إرسال فاتورة PDF لصاحب المتجر بالإيميل — لا يوقف عملية الشراء إذا فشل.
