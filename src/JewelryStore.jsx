@@ -4993,10 +4993,12 @@ export default function JewelryStore() {
     } catch {
       // متابعة بصمت إذا كان sessionStorage غير متاح (وضع تصفح خاص مثلاً)
     }
-    supabase.rpc("increment_product_view", { p_id: productId }).catch(() => {});
+    // ملاحظة: builder الاستعلام هون بيطبّق .then() بس (thenable)، مش .catch() مباشرة — لازم .then()
+    // أول شي حتى يرجّع Promise حقيقي فيه .catch()، وإلا بيرمي TypeError متزامن قبل ما الطلب ينبعت أصلًا
+    supabase.rpc("increment_product_view", { p_id: productId }).then(() => {}, () => {});
     supabase
       .rpc("track_product_view", { p_product_id: productId, p_session_id: getOrCreateAnonSessionId() })
-      .catch(() => {});
+      .then(() => {}, () => {});
   };
 
   const openProduct = (product) => {
