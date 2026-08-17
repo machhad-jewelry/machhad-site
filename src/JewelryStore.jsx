@@ -642,6 +642,22 @@ function generateOrderId(existingIds = []) {
 
 const cartKey = (item) => item.id + "__" + (item.size || "");
 
+// معرّف زيارة مجهول محلي (ليس هوية حقيقية) — يُستخدم فقط لتجميع سلوك التصفح لزائر لم يسجّل دخوله
+// بعد، حتى يعمل التخصيص/التوصيات قبل إنشاء حساب. يبقى نفسه بين الزيارات على نفس المتصفح/الجهاز.
+function getOrCreateAnonSessionId() {
+  try {
+    const key = "mh_session_id";
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 // تحويل صفوف قاعدة البيانات (Supabase) من/إلى شكل الكائنات المستخدم بالواجهة
 
 function productRowToApp(row) {
@@ -670,6 +686,8 @@ function productRowToApp(row) {
     silverType: row.silver_type || null,
     beadCount: row.bead_count != null ? Number(row.bead_count) : null,
     beadSize: row.bead_size || null,
+    featured: !!row.featured,
+    createdAt: row.created_at || null,
   };
 }
 
@@ -698,6 +716,7 @@ function productAppToRow(p) {
     silver_type: p.saleMethod === "weight" && p.metalType === "silver" ? p.silverType || null : null,
     bead_count: p.beadCount || null,
     bead_size: p.beadSize || null,
+    featured: !!p.featured,
   };
 }
 
@@ -784,6 +803,14 @@ const T = {
     fr: "Ceci est une démo — le paiement réel s'active après connexion à une passerelle.",
   },
   mostViewed: { ar: "الأكثر مشاهدة", en: "Most Viewed", fr: "Les Plus Vus" },
+  shopByCategory: { ar: "تسوّق حسب التصنيف", en: "Shop by Category", fr: "Acheter par Catégorie" },
+  newArrivals: { ar: "وصل حديثًا", en: "New Arrivals", fr: "Nouveautés" },
+  featuredProducts: { ar: "منتجات مميزة", en: "Featured Products", fr: "Produits Vedettes" },
+  recommendedForYou: { ar: "مُوصى به لك", en: "Recommended for You", fr: "Recommandé pour Vous" },
+  trendingNow: { ar: "رائج الآن", en: "Trending Now", fr: "Tendance Actuelle" },
+  recentlyViewed: { ar: "شوهد مؤخرًا", en: "Recently Viewed", fr: "Vu Récemment" },
+  relatedProducts: { ar: "قد يعجبك أيضًا", en: "You May Also Like", fr: "Vous Aimerez Aussi" },
+  popularProducts: { ar: "الأكثر رواجًا", en: "Popular Products", fr: "Produits Populaires" },
   chooseCountry: { ar: "تسوّق حسب البلد", en: "Shop by Country", fr: "Acheter par Pays" },
   allCountries: { ar: "كل البلدان", en: "All Countries", fr: "Tous les Pays" },
   allStatuses: { ar: "كل الحالات", en: "All Statuses", fr: "Tous les Statuts" },
@@ -1020,6 +1047,7 @@ const T = {
   moveDownLabel: { ar: "تحريك لأسفل", en: "Move Down", fr: "Descendre" },
   beadCountLabel: { ar: "عدد الحبات", en: "Bead Count", fr: "Nombre de Perles" },
   beadSizeLabel: { ar: "مقاس الحبة", en: "Bead Size", fr: "Taille des Perles" },
+  featuredProductLabel: { ar: "منتج مميز (يظهر في قسم المنتجات المميزة بالصفحة الرئيسية)", en: "Featured product (shows in the homepage Featured section)", fr: "Produit vedette (apparaît dans la section Vedette de l'accueil)" },
   beadSizePlaceholder: { ar: "مثال: 8mm", en: "e.g. 8mm", fr: "ex. 8mm" },
   translateBtn: { ar: "ترجم", en: "Translate", fr: "Traduire" },
   translating: { ar: "جارِ الترجمة...", en: "Translating...", fr: "Traduction en cours..." },
@@ -1200,13 +1228,73 @@ function ProductVisual({ product, imageIndex = 0 }) {
   );
 }
 
+// شريط تمرير أفقي عام لمنتجات، معاد استخدامه لكل أقسام الصفحة الرئيسية الجديدة (وصل حديثًا، مميزة،
+// مُوصى بها، رائجة، شوهدت مؤخرًا) — نفس نمط شريط "الأكثر مشاهدة" الحالي المُختبَر مسبقًا، بس كمكوّن
+// عام قابل لإعادة الاستخدام بدل تكرار نفس الـ JSX ٥-٦ مرات
+function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, onOpen }) {
+  const scrollRef = useRef(null);
+  if (!products || products.length === 0) return null;
+  return (
+    <section className="px-5 sm:px-10 pt-14 pb-2">
+      <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+        {title}
+      </p>
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          className="flex gap-4 sm:gap-6 overflow-x-auto dr-scroll-hide pb-1"
+          style={{ scrollSnapType: "x mandatory" }}
+        >
+          {products.map((p) => (
+            <div
+              key={p.id}
+              className="dr-product group flex-shrink-0 cursor-pointer"
+              style={{ width: 148, scrollSnapAlign: "start" }}
+              onClick={() => onOpen(p)}
+            >
+              <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} /></div>
+              <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
+              <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+                <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
+                {p.originalPrice > p.price && (
+                  <span className="text-[10px]" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {products.length > 3 && (
+          <>
+            <button
+              aria-label="scroll left"
+              onClick={() => scrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+              className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+              style={{ [isRTL ? "right" : "left"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+            >
+              <ChevronLeft size={16} color={THEME.ivory} />
+            </button>
+            <button
+              aria-label="scroll right"
+              onClick={() => scrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+              className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+              style={{ [isRTL ? "left" : "right"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+            >
+              <ChevronRight size={16} color={THEME.ivory} />
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPrices }) {
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
     color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
     saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
-    beadCount: "", beadSize: "",
+    beadCount: "", beadSize: "", featured: false,
   });
   const [msg, setMsg] = useState("");
 
@@ -1407,6 +1495,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
       beadCount: selectedCategory?.requiresBeadCount && form.beadCount ? Number(form.beadCount) : null,
       beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
+      featured: form.featured,
     });
     if (!ok) {
       setMsg(T.updateFailed[lang]);
@@ -1419,7 +1508,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
       color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
       saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
-      beadCount: "", beadSize: "",
+      beadCount: "", beadSize: "", featured: false,
     });
   };
 
@@ -1644,6 +1733,11 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
           )}
         </div>
       )}
+
+      <label className="flex items-center gap-2 text-sm mb-3" style={{ color: THEME.ivory }}>
+        <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} />
+        {T.featuredProductLabel[lang]}
+      </label>
 
       <div className="mb-3">
         <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.repLabel[lang]} *</label>
@@ -2849,6 +2943,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
     weightGrams: product.weightGrams != null ? String(product.weightGrams) : "",
     beadCount: product.beadCount != null ? String(product.beadCount) : "",
     beadSize: product.beadSize || "",
+    featured: !!product.featured,
   });
 
   // قواعد التصنيف المختار — نفس منطق نموذج إضافة المنتج، بس هون لا نلقّن طريقة البيع عند التحميل
@@ -2945,6 +3040,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       silverType: isWeightSale && form.metalType === "silver" ? form.silverType : null,
       beadCount: selectedCategory?.requiresBeadCount && form.beadCount ? Number(form.beadCount) : null,
       beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
+      featured: form.featured,
     });
     if (!ok) setFormError(T.updateFailed[lang]);
   };
@@ -3107,6 +3203,11 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
             )}
           </div>
         )}
+
+        <label className="flex items-center gap-2 text-sm mb-3" style={{ color: THEME.ivory }}>
+          <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} />
+          {T.featuredProductLabel[lang]}
+        </label>
 
         <div className="mb-3">
           <label className="text-xs block mb-1" style={{ color: THEME.ivoryDim }}>{T.repLabel[lang]} *</label>
@@ -4808,6 +4909,81 @@ export default function JewelryStore() {
     [products]
   );
 
+  // أقسام الصفحة الرئيسية الجديدة (المرحلة ١): وصل حديثًا ومنتجات مميزة تُحسب محليًا من products
+  // المحمّلة أصلًا (بدون أي استعلام إضافي)، بعكس مُوصى به/رائج/شوهد مؤخرًا اللي تحتاج تجميع حقيقي
+  // عبر كل الزوار/الجلسات فتُحسب بالسيرفر (دوال get_* بالمرحلة الأولى من الـ SQL الجديد)
+  const newArrivals = useMemo(
+    () =>
+      products
+        .filter((p) => !p.hidden && p.stock > 0)
+        .slice()
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .slice(0, 10),
+    [products]
+  );
+
+  const featuredRaw = useMemo(
+    () => products.filter((p) => !p.hidden && p.stock > 0 && p.featured),
+    [products]
+  );
+
+  const [recommendedRows, setRecommendedRows] = useState([]);
+  const [trendingRows, setTrendingRows] = useState([]);
+  const [recentlyViewedRows, setRecentlyViewedRows] = useState([]);
+
+  // تُجلب مرّة واحدة فقط بعد ما تخلص البيانات الأساسية بالتحميل (ما توقف أول عرض للصفحة)، ومش
+  // بتتكرر كل ما يتغيّر سعر الجرام — إعادة حساب السعر عند تغيّره تصير محليًا بـ applyLivePrice تحت
+  useEffect(() => {
+    if (dataLoading || IS_ADMIN_DOMAIN) return;
+    const sessionId = getOrCreateAnonSessionId();
+    supabase.rpc("get_recommended_products", { p_session_id: sessionId, p_limit: 10 })
+      .then(({ data }) => setRecommendedRows(data || []))
+      .catch(() => {});
+    supabase.rpc("get_trending_products", { p_limit: 10 })
+      .then(({ data }) => setTrendingRows(data || []))
+      .catch(() => {});
+    supabase.rpc("get_recently_viewed", { p_session_id: sessionId, p_limit: 10 })
+      .then(({ data }) => setRecentlyViewedRows(data || []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoading]);
+
+  const applyLivePrice = (row) => {
+    const p = productRowToApp(row);
+    return p.saleMethod === "weight" ? { ...p, price: computeWeightPrice(p, metalGramPrices) } : p;
+  };
+  const recommendedRaw = useMemo(() => recommendedRows.map(applyLivePrice), [recommendedRows, metalGramPrices]);
+  const trendingRaw = useMemo(() => trendingRows.map(applyLivePrice), [trendingRows, metalGramPrices]);
+  const recentlyViewedRaw = useMemo(() => recentlyViewedRows.map(applyLivePrice), [recentlyViewedRows, metalGramPrices]);
+
+  // تفادي تكرار نفس المنتج بعدة أقسام بالصفحة الرئيسية: كل قسم يشيل من المنتجات اللي ظهرت
+  // بقسم سابق، إلا إذا صار عدد المتبقّي قليل جدًا (كتالوج صغير) فيرجع للقائمة الأصلية بدون فلترة
+  const {
+    newArrivalsSection, featuredSection, recommendedSection, trendingSection, recentlyViewedSection,
+  } = useMemo(() => {
+    const used = new Set();
+    const pick = (list) => {
+      const filtered = list.filter((p) => !used.has(p.id));
+      const finalList = filtered.length >= Math.min(3, list.length) ? filtered : list;
+      finalList.forEach((p) => used.add(p.id));
+      return finalList;
+    };
+    return {
+      newArrivalsSection: pick(newArrivals),
+      featuredSection: pick(featuredRaw),
+      recommendedSection: pick(recommendedRaw),
+      trendingSection: pick(trendingRaw),
+      recentlyViewedSection: pick(recentlyViewedRaw),
+    };
+  }, [newArrivals, featuredRaw, recommendedRaw, trendingRaw, recentlyViewedRaw]);
+
+  // زائر جديد بدون أي سجل تصفح: بدل ما يظهر قسم "مُوصى به لك" فارغًا أو بمنتجات عشوائية، يعرض
+  // الأكثر رواجًا فعليًا (بيانات حقيقية من products.views)، وعنوان القسم نفسه يتغيّر بصراحة معه
+  const recommendedForYouProducts = recommendedSection.length > 0
+    ? recommendedSection
+    : (mostViewed.length > 0 ? mostViewed.slice(0, 10) : newArrivalsSection);
+  const recommendedForYouTitle = recommendedSection.length > 0 ? T.recommendedForYou[lang] : T.popularProducts[lang];
+
   // تسجيل مشاهدة صنف مرّة واحدة فقط لكل جلسة تصفح، لتفادي تضخيم العداد بفتح نفس الصنف عدة مرات
   const trackView = (productId) => {
     try {
@@ -4818,6 +4994,9 @@ export default function JewelryStore() {
       // متابعة بصمت إذا كان sessionStorage غير متاح (وضع تصفح خاص مثلاً)
     }
     supabase.rpc("increment_product_view", { p_id: productId }).catch(() => {});
+    supabase
+      .rpc("track_product_view", { p_product_id: productId, p_session_id: getOrCreateAnonSessionId() })
+      .catch(() => {});
   };
 
   const openProduct = (product) => {
@@ -5239,6 +5418,55 @@ export default function JewelryStore() {
         </div>
       </section>
 
+      {/* Shop by category — بطاقات مرئية، مدخل تصفح إضافي بجانب تبويبات التصنيف النصية بالأسفل (بدون حذفها) */}
+      {categories.filter((c) => c.active !== false).length > 0 && (
+        <section className="px-5 sm:px-10 pt-14 pb-2">
+          <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+            {T.shopByCategory[lang]}
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+            {categories
+              .filter((c) => c.active !== false)
+              .slice()
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setCategory(c.id);
+                    document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="relative overflow-hidden rounded-sm group"
+                  style={{ width: 168, height: 168, border: `1px solid ${THEME.surfaceLine}` }}
+                >
+                  {c.image ? (
+                    <img
+                      src={c.image}
+                      alt={c.name[lang]}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: THEME.bgSoft }}>
+                      <Gemstone size={40} />
+                    </div>
+                  )}
+                  <div
+                    className="absolute inset-0 flex items-end justify-center pb-3"
+                    style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), transparent 60%)" }}
+                  >
+                    <span className="text-xs uppercase tracking-widest text-white">{c.name[lang]}</span>
+                  </div>
+                </button>
+              ))}
+          </div>
+        </section>
+      )}
+
+      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+
       {/* Most viewed carousel */}
       {mostViewed.length > 0 && (
         <section className="px-5 sm:px-10 pt-14 pb-2">
@@ -5295,6 +5523,8 @@ export default function JewelryStore() {
           </div>
         </section>
       )}
+
+      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
 
       {/* Country selector */}
       <section className="px-5 sm:px-10 pt-12 pb-2">
@@ -5535,6 +5765,35 @@ export default function JewelryStore() {
             {selected.sizes && selected.sizes.length > 1 && !selectedSize && (
               <p className="text-[11px] text-center mt-2" style={{ color: THEME.ivoryDim }}>{T.selectSize[lang]}</p>
             )}
+
+            {/* منتجات ذات صلة: نفس التصنيف، بدون الصنف الحالي — محسوبة محليًا من products المحمّلة أصلًا */}
+            {(() => {
+              const related = products
+                .filter((p) => p.id !== selected.id && p.cat === selected.cat && !p.hidden && p.stock > 0)
+                .slice(0, 8);
+              if (related.length === 0) return null;
+              return (
+                <div className="mt-8 -mx-6 sm:-mx-8">
+                  <p className="text-center text-[11px] uppercase mb-4" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+                    {T.relatedProducts[lang]}
+                  </p>
+                  <div className="flex gap-4 overflow-x-auto dr-scroll-hide px-6 sm:px-8 pb-1" style={{ scrollSnapType: "x mandatory" }}>
+                    {related.map((p) => (
+                      <div
+                        key={p.id}
+                        className="dr-product group flex-shrink-0 cursor-pointer"
+                        style={{ width: 120, scrollSnapAlign: "start" }}
+                        onClick={() => openProduct(p)}
+                      >
+                        <div className="dr-product-img" style={{ width: 120 }}><ProductVisual product={p} /></div>
+                        <h3 className="text-[11px] mt-2 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
+                        <p className="text-[11px] text-center" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
