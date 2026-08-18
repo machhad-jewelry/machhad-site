@@ -674,6 +674,7 @@ function productRowToApp(row) {
     stock: row.stock ?? 0,
     sizes: row.sizes || [],
     images: row.images || [],
+    thumbnails: row.thumbnails || [],
     countries: row.countries || [],
     rep: row.rep || "",
     barcode: row.barcode || "",
@@ -705,6 +706,7 @@ function productAppToRow(p) {
     stock: p.stock || 0,
     sizes: p.sizes || [],
     images: p.images || [],
+    thumbnails: p.thumbnails || [],
     countries: p.countries || [],
     rep: p.rep || null,
     barcode: p.barcode || null,
@@ -1197,11 +1199,58 @@ function BeadString({ color }) {
   );
 }
 
-function ProductVisual({ product, imageIndex = 0 }) {
+// variant="thumbnail" (افتراضي): يعرض النسخة المصغّرة (أسرع تحميلًا)، مع fallback تلقائي للصورة
+// الأصلية لأي منتج قديم ما إله نسخة مصغّرة بعد. variant="full": يعرض الصورة الأصلية كاملة الدقة
+// دائمًا (صفحة تفاصيل المنتج والـ Lightbox فقط). autoPlay: يبدّل بين الصور تلقائيًا كل 3 ثوانٍ
+// (بطاقات المنتجات فقط — لا يُفعَّل بجداول الإدارة ولا السلة)، متوقف مؤقتًا أثناء تمرير الماوس،
+// ومتجاهل أي صورة مكررة بنفس المنتج. priority: تحميل فوري (eager) بدل lazy — للصورة الرئيسية فقط.
+function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPlay = false, priority = false }) {
   const isString = product.cat === "masabih" || product.cat === "bracelets";
-  const hasPhoto = product.images && product.images.length > 0;
+  const images = product.images || [];
+  const thumbs = product.thumbnails || [];
+
+  // فهارس الصور الفريدة فقط (بدون تكرار نفس الصورة الأصلية بالغلط) — تُستخدم فقط بوضع autoPlay
+  const uniqueIndices = useMemo(() => {
+    const seen = new Set();
+    const idxs = [];
+    images.forEach((src, i) => {
+      if (src && !seen.has(src)) {
+        seen.add(src);
+        idxs.push(i);
+      }
+    });
+    return idxs;
+  }, [images]);
+
+  const [autoPos, setAutoPos] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setAutoPos(0);
+  }, [product.id]);
+
+  useEffect(() => {
+    if (!autoPlay || paused || uniqueIndices.length < 2) return;
+    const id = setInterval(() => setAutoPos((p) => (p + 1) % uniqueIndices.length), 3000);
+    return () => clearInterval(id);
+  }, [autoPlay, paused, uniqueIndices.length]);
+
+  const activeIndex = autoPlay
+    ? uniqueIndices[autoPos] ?? 0
+    : Math.min(imageIndex, Math.max(images.length - 1, 0));
+
+  const src = images.length > 0 ? (variant === "full" ? images[activeIndex] : thumbs[activeIndex] || images[activeIndex]) : null;
+  const hasPhoto = !!src && !imgError;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   return (
     <div
+      onMouseEnter={autoPlay ? () => setPaused(true) : undefined}
+      onMouseLeave={autoPlay ? () => setPaused(false) : undefined}
       style={{
         width: "100%", aspectRatio: "1/1", position: "relative", borderRadius: 2,
         background: "linear-gradient(160deg, #FBFAF8 0%, #EFEBE5 100%)",
@@ -1211,9 +1260,15 @@ function ProductVisual({ product, imageIndex = 0 }) {
     >
       {hasPhoto ? (
         <img
-          src={product.images[Math.min(imageIndex, product.images.length - 1)]}
+          key={activeIndex}
+          src={src}
           alt={product.name?.ar || ""}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          loading={priority ? "eager" : "lazy"}
+          onError={() => setImgError(true)}
+          style={{
+            width: "100%", height: "100%", objectFit: "cover",
+            animation: autoPlay && uniqueIndices.length > 1 ? "dr-crossfade 0.6s ease" : undefined,
+          }}
         />
       ) : (
         <>
@@ -1252,7 +1307,7 @@ function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, 
               style={{ width: 148, scrollSnapAlign: "start" }}
               onClick={() => onOpen(p)}
             >
-              <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} /></div>
+              <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} autoPlay /></div>
               <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                 <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
@@ -1288,11 +1343,225 @@ function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, 
   );
 }
 
+// معرض صور بملء الشاشة (Lightbox) لصفحة تفاصيل المنتج: تنقّل بالأسهم/اللمس/لوحة المفاتيح، عدّاد
+// صور، تكبير بالنقر أو بتباعد أصبعين (pinch) مع تحديد أقصى تكبير حسب دقة الصورة الأصلية (حتى لا
+// تصبح ضبابية)، وسحب للتنقل داخل الصورة المكبّرة. يتجاهل أي صورة مكررة بنفس المنتج تلقائيًا.
+function ImageLightbox({ product, startIndex, isRTL, onClose, onIndexChange }) {
+  const images = product?.images || [];
+  const thumbs = product?.thumbnails || [];
+
+  const uniqueIndices = useMemo(() => {
+    const seen = new Set();
+    const idxs = [];
+    images.forEach((src, i) => {
+      if (src && !seen.has(src)) {
+        seen.add(src);
+        idxs.push(i);
+      }
+    });
+    return idxs;
+  }, [images]);
+
+  const initialPos = Math.max(0, uniqueIndices.indexOf(startIndex));
+  const [pos, setPos] = useState(initialPos);
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const imgRef = useRef(null);
+  const mouseDragRef = useRef(null);
+  const touchDragRef = useRef(null);
+  const pinchRef = useRef(null);
+  const swipeStartXRef = useRef(null);
+
+  const total = uniqueIndices.length;
+  const currentIndex = uniqueIndices[pos] ?? startIndex;
+
+  useEffect(() => {
+    onIndexChange?.(currentIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex]);
+
+  const goTo = (nextPos) => {
+    setPos(((nextPos % total) + total) % total);
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  };
+  const goNext = () => goTo(pos + 1);
+  const goPrev = () => goTo(pos - 1);
+
+  // Escape للإغلاق، والأسهم تتنقّل باتجاه القراءة الطبيعي حسب اللغة (معكوسة بالعربي RTL)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") (isRTL ? goPrev : goNext)();
+      else if (e.key === "ArrowLeft") (isRTL ? goNext : goPrev)();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos, total, isRTL]);
+
+  const getMaxScale = () => {
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth || !img.clientWidth) return 3;
+    return Math.max(1, Math.min(4, img.naturalWidth / img.clientWidth));
+  };
+
+  const onImageClick = () => {
+    if (scale > 1) {
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+    } else {
+      setScale(Math.min(2, getMaxScale()));
+    }
+  };
+
+  const onMouseDown = (e) => {
+    if (scale <= 1) return;
+    mouseDragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+  };
+  const onMouseMove = (e) => {
+    if (!mouseDragRef.current) return;
+    setPan({
+      x: mouseDragRef.current.panX + (e.clientX - mouseDragRef.current.startX),
+      y: mouseDragRef.current.panY + (e.clientY - mouseDragRef.current.startY),
+    });
+  };
+  const onMouseUp = () => {
+    mouseDragRef.current = null;
+  };
+
+  const onTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      pinchRef.current = { startDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), startScale: scale };
+      return;
+    }
+    if (scale > 1) {
+      touchDragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, panX: pan.x, panY: pan.y };
+    } else {
+      swipeStartXRef.current = e.touches[0].clientX;
+    }
+  };
+  const onTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      const [a, b] = e.touches;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const next = Math.min(getMaxScale(), Math.max(1, pinchRef.current.startScale * (dist / pinchRef.current.startDist)));
+      setScale(next);
+      return;
+    }
+    if (touchDragRef.current && scale > 1) {
+      setPan({
+        x: touchDragRef.current.panX + (e.touches[0].clientX - touchDragRef.current.startX),
+        y: touchDragRef.current.panY + (e.touches[0].clientY - touchDragRef.current.startY),
+      });
+    }
+  };
+  const onTouchEnd = (e) => {
+    pinchRef.current = null;
+    touchDragRef.current = null;
+    if (swipeStartXRef.current != null && scale === 1) {
+      const endX = (e.changedTouches[0] || {}).clientX;
+      if (endX != null && Math.abs(endX - swipeStartXRef.current) > 50) {
+        const swipedLeft = endX - swipeStartXRef.current < 0;
+        (isRTL ? swipedLeft : !swipedLeft) ? goPrev() : goNext();
+      }
+    }
+    swipeStartXRef.current = null;
+  };
+
+  if (total === 0) return null;
+  const src = images[currentIndex];
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center p-4"
+      style={{ background: "rgba(10,10,10,0.94)" }}
+      onClick={onClose}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="absolute top-5 right-5 p-2 rounded-full"
+        style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+      >
+        <X size={20} color={THEME.ivory} />
+      </button>
+
+      {total > 1 && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            className="hidden sm:flex absolute top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full"
+            style={{ [isRTL ? "right" : "left"]: 16, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+          >
+            <ChevronLeft size={20} color={THEME.ivory} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            className="hidden sm:flex absolute top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full"
+            style={{ [isRTL ? "left" : "right"]: 16, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+          >
+            <ChevronRight size={20} color={THEME.ivory} />
+          </button>
+        </>
+      )}
+
+      <div
+        className="flex-1 flex items-center justify-center w-full overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+      >
+        <img
+          ref={imgRef}
+          key={currentIndex}
+          src={src}
+          alt=""
+          draggable={false}
+          onMouseDown={onMouseDown}
+          onClick={onImageClick}
+          style={{
+            maxWidth: "92vw", maxHeight: "76vh", objectFit: "contain", borderRadius: 4,
+            cursor: scale > 1 ? "grab" : "zoom-in",
+            transform: `scale(${scale}) translate(${pan.x / scale}px, ${pan.y / scale}px)`,
+            transition: mouseDragRef.current || touchDragRef.current ? "none" : "transform 0.25s ease",
+          }}
+        />
+      </div>
+
+      {total > 1 && (
+        <p className="mt-3 text-xs" style={{ color: THEME.ivoryDim }} onClick={(e) => e.stopPropagation()}>
+          {pos + 1} / {total}
+        </p>
+      )}
+
+      {total > 1 && (
+        <div className="flex gap-2 mt-3 flex-wrap justify-center px-4" onClick={(e) => e.stopPropagation()}>
+          {uniqueIndices.map((idx, i) => (
+            <button
+              key={idx}
+              onClick={() => goTo(i)}
+              className="w-10 h-10 rounded-sm overflow-hidden flex-shrink-0"
+              style={{ border: `1px solid ${i === pos ? THEME.gold : THEME.surfaceLine}` }}
+            >
+              <img src={thumbs[idx] || images[idx]} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPrices }) {
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
-    color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
+    color: "#B9A576", countries: [], images: [], thumbnails: [], sizesText: "", rep: "",
     saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
     beadCount: "", beadSize: "", featured: false,
   });
@@ -1406,17 +1675,28 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       countries: f.countries.includes(id) ? f.countries.filter((c) => c !== id) : [...f.countries, id],
     }));
 
-  const handleImages = (e) => {
+  // تُعالَج الصور بالتتابع (وليس بالتوازي) حتى تبقى images وthumbnails متطابقتين بنفس الترتيب
+  // بالضبط حتى لو اختار المشرف عدة صور دفعة وحدة — الصورة الأصلية تُحفظ كما هي دائمًا (بدون أي
+  // ضغط)، والنسخة المصغّرة تُنشأ بجانبها فقط لتخفيف حجم التحميل بالبطاقات/الكاروسيلات
+  const handleImages = async (e) => {
     const files = Array.from(e.target.files || []).slice(0, 6 - form.images.length);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => setForm((f) => ({ ...f, images: [...f.images, reader.result] }));
-      reader.readAsDataURL(file);
-    });
     e.target.value = "";
+    for (const file of files) {
+      try {
+        const { full, thumbnail } = await readProductImagePair(file);
+        setForm((f) => ({ ...f, images: [...f.images, full], thumbnails: [...f.thumbnails, thumbnail] }));
+      } catch {
+        // تجاهل ملف فشلت قراءته/فك ترميزه، تابع البقية
+      }
+    }
   };
 
-  const removeImage = (idx) => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
+  const removeImage = (idx) =>
+    setForm((f) => ({
+      ...f,
+      images: f.images.filter((_, i) => i !== idx),
+      thumbnails: f.thumbnails.filter((_, i) => i !== idx),
+    }));
 
   const isWeightSale = form.saleMethod === "weight";
   const weightPricePreview = isWeightSale
@@ -1477,6 +1757,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       cat: form.cat,
       color: form.color,
       images: form.images,
+      thumbnails: form.thumbnails,
       name: { ar: form.nameAr || form.nameEn, en: form.nameEn || form.nameAr, fr: form.nameFr || form.nameEn || form.nameAr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
@@ -1506,7 +1787,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     setForm({
       nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
       descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
-      color: "#B9A576", countries: [], images: [], sizesText: "", rep: "",
+      color: "#B9A576", countries: [], images: [], thumbnails: [], sizesText: "", rep: "",
       saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
       beadCount: "", beadSize: "", featured: false,
     });
@@ -2935,6 +3216,10 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
     countries: product.countries || [],
     sizesText: (product.sizes || []).join(", "),
     images: product.images || [],
+    // محاذاة thumbnails مع images حسب الفهرس دائمًا — منتجات قديمة بدون نسخ مصغّرة تحصل على null
+    // بمكانها (تعتمد على fallback الصورة الأصلية بـ ProductVisual)، حتى ما تنخلط الفهارس لما يُضاف
+    // صنف صورة جديدة فوق صور قديمة غير مُحدَّثة
+    thumbnails: (product.images || []).map((_, i) => (product.thumbnails && product.thumbnails[i]) || null),
     rep: product.rep || "",
     saleMethod: product.saleMethod || "piece",
     metalType: product.metalType || "gold",
@@ -2960,16 +3245,24 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       countries: f.countries.includes(id) ? f.countries.filter((c) => c !== id) : [...f.countries, id],
     }));
 
-  const handleImages = (e) => {
+  const handleImages = async (e) => {
     const files = Array.from(e.target.files || []).slice(0, 6 - form.images.length);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => setForm((f) => ({ ...f, images: [...f.images, reader.result] }));
-      reader.readAsDataURL(file);
-    });
     e.target.value = "";
+    for (const file of files) {
+      try {
+        const { full, thumbnail } = await readProductImagePair(file);
+        setForm((f) => ({ ...f, images: [...f.images, full], thumbnails: [...f.thumbnails, thumbnail] }));
+      } catch {
+        // تجاهل ملف فشلت قراءته/فك ترميزه، تابع البقية
+      }
+    }
   };
-  const removeImage = (idx) => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
+  const removeImage = (idx) =>
+    setForm((f) => ({
+      ...f,
+      images: f.images.filter((_, i) => i !== idx),
+      thumbnails: f.thumbnails.filter((_, i) => i !== idx),
+    }));
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
 
@@ -3023,6 +3316,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       cat: form.cat,
       color: form.color,
       images: form.images,
+      thumbnails: form.thumbnails,
       name: { ar: form.nameAr, en: form.nameEn, fr: form.nameFr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
@@ -4189,6 +4483,33 @@ function resizeImageToDataUrl(file, maxDim) {
   });
 }
 
+// تقرأ ملف صورة منتج مرّة واحدة وترجّع الصورة الأصلية كاملة الدقة (بدون أي ضغط، كما هي دائمًا)
+// بالإضافة إلى نسخة مصغّرة (thumbnail) لعرضها بالبطاقات/الكاروسيلات — الصورة الأصلية تبقى دائمًا
+// مصدر الحقيقة الوحيد، النسخة المصغّرة إضافية فقط لتخفيف حجم التحميل بالأماكن اللي ما تحتاج جودة كاملة
+function readProductImagePair(file, thumbMaxDim = 480) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const full = reader.result;
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = Math.min(1, thumbMaxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve({ full, thumbnail: canvas.toDataURL("image/jpeg", 0.82) });
+      };
+      img.src = full;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function CustomerAccountModal({ lang, session, customerProfile, orders, products, storeInfo, fmtPrice, onClose, onAuthed, onProfileUpdate }) {
   const [view, setView] = useState(session ? "orders" : "login");
   const [name, setName] = useState("");
@@ -4596,7 +4917,7 @@ export default function JewelryStore() {
   const [modalImgIndex, setModalImgIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState(null);
   const [sizeRequest, setSizeRequest] = useState("");
-  const [lightbox, setLightbox] = useState(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [announceIndex, setAnnounceIndex] = useState(0);
   const [customDesignOpen, setCustomDesignOpen] = useState(false);
   const [customerAuthOpen, setCustomerAuthOpen] = useState(false);
@@ -5006,6 +5327,7 @@ export default function JewelryStore() {
     setModalImgIndex(0);
     setSelectedSize(null);
     setSizeRequest("");
+    setLightboxOpen(false);
     trackView(product.id);
   };
 
@@ -5275,6 +5597,7 @@ export default function JewelryStore() {
         @keyframes dr-rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
         @keyframes dr-pulse { 0%,100% { opacity:.55;} 50% { opacity:1;} }
         @keyframes dr-fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+        @keyframes dr-crossfade { from { opacity: 0;} to { opacity: 1;} }
         .dr-announce-fade { animation: dr-fade 0.5s ease; }
         .dr-hero-gem { animation: dr-rotate 18s linear infinite; }
         .dr-hero-glow { animation: dr-pulse 4s ease-in-out infinite; }
@@ -5488,7 +5811,7 @@ export default function JewelryStore() {
                   style={{ width: 148, scrollSnapAlign: "start" }}
                   onClick={() => openProduct(p)}
                 >
-                  <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} /></div>
+                  <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} autoPlay /></div>
                   <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
                   <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                     <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
@@ -5602,7 +5925,7 @@ export default function JewelryStore() {
       <section className="px-5 sm:px-10 py-10 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-14">
         {filtered.map((p) => (
           <div key={p.id} className="dr-product group flex flex-col cursor-pointer" onClick={() => openProduct(p)}>
-            <div className="dr-product-img"><ProductVisual product={p} /></div>
+            <div className="dr-product-img"><ProductVisual product={p} autoPlay /></div>
             <div className="mt-4 flex-1 text-center">
               <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <p className="text-[11px] sm:text-xs mt-1.5 truncate" style={{ color: THEME.ivoryDim }}>{p.mat[lang]}</p>
@@ -5663,11 +5986,11 @@ export default function JewelryStore() {
               style={{ cursor: selected.images && selected.images.length > 0 ? "zoom-in" : "default" }}
               onClick={() => {
                 if (selected.images && selected.images.length > 0) {
-                  setLightbox(selected.images[modalImgIndex]);
+                  setLightboxOpen(true);
                 }
               }}
             >
-              <ProductVisual product={selected} imageIndex={modalImgIndex} />
+              <ProductVisual product={selected} imageIndex={modalImgIndex} variant="full" priority />
             </div>
             {selected.images && selected.images.length > 1 && (
               <div className="flex justify-center gap-2 mt-3">
@@ -5678,7 +6001,7 @@ export default function JewelryStore() {
                     className="w-9 h-9 rounded-sm overflow-hidden"
                     style={{ border: `1px solid ${idx === modalImgIndex ? THEME.gold : THEME.surfaceLine}` }}
                   >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={selected.thumbnails?.[idx] || src} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </button>
                 ))}
               </div>
@@ -5787,7 +6110,7 @@ export default function JewelryStore() {
                         style={{ width: 120, scrollSnapAlign: "start" }}
                         onClick={() => openProduct(p)}
                       >
-                        <div className="dr-product-img" style={{ width: 120 }}><ProductVisual product={p} /></div>
+                        <div className="dr-product-img" style={{ width: 120 }}><ProductVisual product={p} autoPlay /></div>
                         <h3 className="text-[11px] mt-2 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
                         <p className="text-[11px] text-center" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</p>
                       </div>
@@ -6167,26 +6490,14 @@ export default function JewelryStore() {
         </div>
       )}
 
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.9)" }}
-          onClick={() => setLightbox(null)}
-        >
-          <button
-            onClick={() => setLightbox(null)}
-            className="absolute top-5 right-5 p-2 rounded-full"
-            style={{ background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
-          >
-            <X size={20} color={THEME.ivory} />
-          </button>
-          <img
-            src={lightbox}
-            alt=""
-            style={{ maxWidth: "92vw", maxHeight: "88vh", objectFit: "contain", borderRadius: 4 }}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+      {lightboxOpen && selected && (
+        <ImageLightbox
+          product={selected}
+          startIndex={modalImgIndex}
+          isRTL={isRTL}
+          onClose={() => setLightboxOpen(false)}
+          onIndexChange={setModalImgIndex}
+        />
       )}
     </div>
   );
