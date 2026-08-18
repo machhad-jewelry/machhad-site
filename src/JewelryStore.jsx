@@ -814,6 +814,7 @@ const T = {
     en: "Authentic handcraft — from our atelier to your hands",
     fr: "Artisanat authentique — de notre atelier à vos mains",
   },
+  visitorCountLabel: { ar: "عدد الزوار", en: "Visitors", fr: "Visiteurs" },
   rights: { ar: "جميع الحقوق محفوظة", en: "All rights reserved", fr: "Tous droits réservés" },
   checkoutNote: {
     ar: "هذا عرض تجريبي — الدفع الفعلي يُضاف عند ربط المتجر ببوابة دفع.",
@@ -5023,6 +5024,7 @@ export default function JewelryStore() {
   const [metalGramPrices, setMetalGramPrices] = useState(DEFAULT_METAL_GRAM_PRICES);
   const [heroTitle, setHeroTitle] = useState({ ar: T.heroTitle.ar, en: T.heroTitle.en, fr: T.heroTitle.fr });
   const [storeInfo, setStoreInfo] = useState({ phone: "", address: "" });
+  const [siteVisitCount, setSiteVisitCount] = useState(null);
   const [invoiceRecipients, setInvoiceRecipients] = useState([]);
   const [customers, setCustomers] = useState([]);
   // الأصناف "المباعة بالوزن" تُحتسب أسعارها هون تلقائيًا من الأسعار المركزية للجرام —
@@ -5226,7 +5228,7 @@ export default function JewelryStore() {
         if (data) setRawProducts(data.map((row) => productRowToApp({ ...row, images: row.images || [] })));
       });
 
-      const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
+      const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes, siteVisitsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at"),
         supabase.from(orderItemsTable).select("*"),
         supabase.from("reps").select("*").order("id"),
@@ -5235,7 +5237,24 @@ export default function JewelryStore() {
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("metal_gram_prices").select("*").eq("id", 1).maybeSingle(),
         supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
+        supabase.from("site_visits").select("count").eq("id", 1).maybeSingle(),
       ]);
+
+      // عدّاد الزوار: يزيد مرّة واحدة بس لكل متصفح/جهاز (علامة بالـ localStorage تمنع التكرار
+      // عند تحديث الصفحة)، وفقط بالمتجر العام (زيارات لوحة الإدارة ما تُحتسب كزوار)
+      if (siteVisitsRes.data) setSiteVisitCount(Number(siteVisitsRes.data.count) || 0);
+      if (!IS_ADMIN_DOMAIN) {
+        try {
+          if (!localStorage.getItem("mh_visit_counted")) {
+            localStorage.setItem("mh_visit_counted", "1");
+            supabase.rpc("increment_site_visit").then(() => {
+              setSiteVisitCount((c) => (c == null ? 1 : c + 1));
+            }, () => {});
+          }
+        } catch {
+          // متابعة بصمت إذا كان localStorage غير متاح
+        }
+      }
 
       if (gramPricesRes.data) setMetalGramPrices(metalGramPricesRowToApp(gramPricesRes.data));
       if (siteSettingsRes.data) {
@@ -6076,6 +6095,11 @@ export default function JewelryStore() {
       <footer className="mt-16 px-5 sm:px-10 py-14 border-t text-center" style={{ borderColor: THEME.surfaceLine, background: THEME.bgSoft }}>
         <img src={LOGO_SRC} alt={T.brand[lang]} className="mx-auto mb-4 w-44 h-auto object-contain" />
         <p className="text-xs mt-3 tracking-wide" style={{ color: THEME.ivoryDim }}>{T.footerTagline[lang]}</p>
+        {siteVisitCount != null && (
+          <p className="text-xs mt-4" style={{ color: THEME.goldSoft }}>
+            {T.visitorCountLabel[lang]}: <span dir="ltr">{siteVisitCount.toLocaleString(lang === "ar" ? "ar-SA" : lang === "fr" ? "fr-FR" : "en-US")}</span>
+          </p>
+        )}
         <p className="text-xs mt-5" style={{ color: THEME.ivoryDim, opacity: 0.7 }}>© 2026 {T.brand[lang]} — {T.rights[lang]}</p>
       </footer>
 
