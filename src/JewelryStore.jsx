@@ -1534,7 +1534,7 @@ function ImageLightbox({ product, startIndex, isRTL, onClose, onIndexChange }) {
       </div>
 
       {total > 1 && (
-        <p className="mt-3 text-xs" style={{ color: THEME.ivoryDim }} onClick={(e) => e.stopPropagation()}>
+        <p className="mt-3 text-xs" dir="ltr" style={{ color: THEME.ivoryDim }} onClick={(e) => e.stopPropagation()}>
           {pos + 1} / {total}
         </p>
       )}
