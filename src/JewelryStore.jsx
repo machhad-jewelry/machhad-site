@@ -5894,66 +5894,6 @@ export default function JewelryStore() {
       <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
       <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
       <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-
-      {/* Most viewed carousel */}
-      {mostViewed.length > 0 && (
-        <section className="px-5 sm:px-10 pt-14 pb-2">
-          <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
-            {T.mostViewed[lang]}
-          </p>
-          <div className="relative">
-            <div
-              ref={mostViewedScrollRef}
-              className="flex gap-4 sm:gap-6 overflow-x-auto dr-scroll-hide pb-1"
-              style={{ scrollSnapType: "x mandatory" }}
-            >
-              {mostViewed.map((p) => (
-                <div
-                  key={p.id}
-                  className="dr-product group flex-shrink-0 cursor-pointer"
-                  style={{ width: 148, scrollSnapAlign: "start" }}
-                  onClick={() => openProduct(p)}
-                >
-                  <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} autoPlay /></div>
-                  <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
-                  <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-                    <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
-                    {p.originalPrice > p.price && (
-                      <span className="text-[10px]" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] mt-1 flex items-center justify-center gap-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
-                    <Eye size={11} /> {p.views}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {mostViewed.length > 3 && (
-              <>
-                <button
-                  aria-label="scroll left"
-                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
-                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
-                  style={{ [isRTL ? "right" : "left"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
-                >
-                  <ChevronLeft size={16} color={THEME.ivory} />
-                </button>
-                <button
-                  aria-label="scroll right"
-                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
-                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
-                  style={{ [isRTL ? "left" : "right"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
-                >
-                  <ChevronRight size={16} color={THEME.ivory} />
-                </button>
-              </>
-            )}
-          </div>
-        </section>
-      )}
-
-      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
 
       {/* Country selector */}
       <section className="px-5 sm:px-10 pt-12 pb-2">
@@ -6070,6 +6010,67 @@ export default function JewelryStore() {
           </div>
         ))}
       </section>
+
+      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+
+      {/* Most viewed carousel */}
+      {mostViewed.length > 0 && (
+        <section className="px-5 sm:px-10 pt-14 pb-2">
+          <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+            {T.mostViewed[lang]}
+          </p>
+          <div className="relative">
+            <div
+              ref={mostViewedScrollRef}
+              className="flex gap-4 sm:gap-6 overflow-x-auto dr-scroll-hide pb-1"
+              style={{ scrollSnapType: "x mandatory" }}
+            >
+              {mostViewed.map((p) => (
+                <div
+                  key={p.id}
+                  className="dr-product group flex-shrink-0 cursor-pointer"
+                  style={{ width: 148, scrollSnapAlign: "start" }}
+                  onClick={() => openProduct(p)}
+                >
+                  <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} autoPlay /></div>
+                  <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
+                  <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
+                    {p.originalPrice > p.price && (
+                      <span className="text-[10px]" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] mt-1 flex items-center justify-center gap-1" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>
+                    <Eye size={11} /> {p.views}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {mostViewed.length > 3 && (
+              <>
+                <button
+                  aria-label="scroll left"
+                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+                  style={{ [isRTL ? "right" : "left"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+                >
+                  <ChevronLeft size={16} color={THEME.ivory} />
+                </button>
+                <button
+                  aria-label="scroll right"
+                  onClick={() => mostViewedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+                  className="hidden sm:flex absolute top-1/3 -translate-y-1/2 items-center justify-center w-8 h-8 rounded-full"
+                  style={{ [isRTL ? "left" : "right"]: -14, background: THEME.surface, border: `1px solid ${THEME.surfaceLine}` }}
+                >
+                  <ChevronRight size={16} color={THEME.ivory} />
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
 
       {/* Footer */}
       <footer className="mt-16 px-5 sm:px-10 py-14 border-t text-center" style={{ borderColor: THEME.surfaceLine, background: THEME.bgSoft }}>
