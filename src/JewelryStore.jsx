@@ -5891,10 +5891,6 @@ export default function JewelryStore() {
         </section>
       )}
 
-      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-
       {/* Country selector */}
       <section className="px-5 sm:px-10 pt-12 pb-2">
         <p className="text-center text-[11px] uppercase mb-4" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
@@ -5930,6 +5926,10 @@ export default function JewelryStore() {
           ))}
         </div>
       </section>
+
+      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
 
       {/* Category filters */}
       <section id="shop" className="px-5 sm:px-10 pt-6 pb-2">
