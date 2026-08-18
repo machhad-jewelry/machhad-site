@@ -1247,6 +1247,44 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
     setImgError(false);
   }, [src]);
 
+  // انتقال متدرّج حقيقي بطبقتين (وليس بإعادة تركيب الصورة عبر key) — الطبقة السفلية تبقى معتّمة
+  // بالكامل طول الوقت وتغطي خلفية الحاوية الفاتحة، والطبقة العلوية الجديدة تتلاشى فوقها تدريجيًا،
+  // فما في أي لحظة تنكشف فيها الخلفية (كانت هيي سبب "الوميض الأبيض" بالنسخة الأولى المعتمِدة على
+  // opacity من الصفر مباشرة). يُفعَّل فقط بوضع autoPlay — بقية الحالات تبدّل الصورة فورًا كالسابق
+  const [bottomSrc, setBottomSrc] = useState(src);
+  const [topSrc, setTopSrc] = useState(null);
+  const [topVisible, setTopVisible] = useState(false);
+  const prevSrcRef = useRef(src);
+  const settleTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (src === prevSrcRef.current) return;
+    prevSrcRef.current = src;
+    clearTimeout(settleTimerRef.current);
+    if (!autoPlay) {
+      setBottomSrc(src);
+      setTopSrc(null);
+      setTopVisible(false);
+      return;
+    }
+    setTopSrc(src);
+    setTopVisible(false);
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setTopVisible(true));
+    });
+    settleTimerRef.current = setTimeout(() => {
+      setBottomSrc(src);
+      setTopSrc(null);
+      setTopVisible(false);
+    }, 700);
+    return () => {
+      cancelAnimationFrame(raf1);
+      clearTimeout(settleTimerRef.current);
+    };
+  }, [src, autoPlay]);
+
+  useEffect(() => () => clearTimeout(settleTimerRef.current), []);
+
   return (
     <div
       onMouseEnter={autoPlay ? () => setPaused(true) : undefined}
@@ -1259,17 +1297,26 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
       }}
     >
       {hasPhoto ? (
-        <img
-          key={activeIndex}
-          src={src}
-          alt={product.name?.ar || ""}
-          loading={priority ? "eager" : "lazy"}
-          onError={() => setImgError(true)}
-          style={{
-            width: "100%", height: "100%", objectFit: "cover",
-            animation: autoPlay && uniqueIndices.length > 1 ? "dr-crossfade 0.6s ease" : undefined,
-          }}
-        />
+        <>
+          <img
+            src={bottomSrc}
+            alt={product.name?.ar || ""}
+            loading={priority ? "eager" : "lazy"}
+            onError={() => setImgError(true)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          />
+          {topSrc && (
+            <img
+              src={topSrc}
+              alt=""
+              loading="eager"
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
+                opacity: topVisible ? 1 : 0, transition: "opacity 0.6s ease",
+              }}
+            />
+          )}
+        </>
       ) : (
         <>
           <div style={{
@@ -5597,7 +5644,6 @@ export default function JewelryStore() {
         @keyframes dr-rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
         @keyframes dr-pulse { 0%,100% { opacity:.55;} 50% { opacity:1;} }
         @keyframes dr-fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
-        @keyframes dr-crossfade { from { opacity: 0;} to { opacity: 1;} }
         .dr-announce-fade { animation: dr-fade 0.5s ease; }
         .dr-hero-gem { animation: dr-rotate 18s linear infinite; }
         .dr-hero-glow { animation: dr-pulse 4s ease-in-out infinite; }
