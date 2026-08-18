@@ -1224,19 +1224,23 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
   const isString = product.cat === "masabih" || product.cat === "bracelets";
   const images = product.images || [];
   const thumbs = product.thumbnails || [];
+  // قائمة القائمة الأساسية ما فيها images (كاملة الدقة) عمدًا — راجع ملاحظة LEAN_PRODUCT_COLUMNS —
+  // فلازم نعتمد على thumbnails لتحديد "كم صورة عند هالصنف" و"فهرسة العرض" كمصدر أساسي، مش images،
+  // وإلا كل صنف لسا ما انفتح مرّة رح يبان بدون صورة أبدًا بالبطاقات رغم وجود نسخته المصغّرة فعليًا
+  const countSource = thumbs.length > 0 ? thumbs : images;
 
   // فهارس الصور الفريدة فقط (بدون تكرار نفس الصورة الأصلية بالغلط) — تُستخدم فقط بوضع autoPlay
   const uniqueIndices = useMemo(() => {
     const seen = new Set();
     const idxs = [];
-    images.forEach((src, i) => {
+    countSource.forEach((src, i) => {
       if (src && !seen.has(src)) {
         seen.add(src);
         idxs.push(i);
       }
     });
     return idxs;
-  }, [images]);
+  }, [countSource]);
 
   const [autoPos, setAutoPos] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -1254,9 +1258,9 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
 
   const activeIndex = autoPlay
     ? uniqueIndices[autoPos] ?? 0
-    : Math.min(imageIndex, Math.max(images.length - 1, 0));
+    : Math.min(imageIndex, Math.max(countSource.length - 1, 0));
 
-  const src = images.length > 0 ? (variant === "full" ? images[activeIndex] : thumbs[activeIndex] || images[activeIndex]) : null;
+  const src = variant === "full" ? (images[activeIndex] || null) : (thumbs[activeIndex] || images[activeIndex] || null);
   const hasPhoto = !!src && !imgError;
 
   useEffect(() => {
