@@ -1248,37 +1248,40 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
   }, [src]);
 
   // انتقال متدرّج حقيقي بطبقتين ثابتتين بالـ DOM دائمًا (بدون تركيب/فك تركيب أي عنصر) — الطبقة
-  // العلوية بحالة الراحة دائمًا شفافة (opacity 0) وتعرض نفس صورة الطبقة السفلية، فلما توصل صورة
-  // جديدة نغيّر محتواها فقط ونرفع شفافيتها لـ 1 بنفس اللحظة — تغيّر حالة حقيقي بين تصيير وتصيير،
-  // مش "تركيب ثم تعديل فوري" (كان هالنمط السابق أحيانًا ما يشغّل انتقال CSS أصلًا لأنو المتصفح
-  // بيدمج الحالتين بنفس اللحظة رسم واحدة). الطبقة السفلية تبقى معتّمة بالكامل طول الوقت فتغطّي
-  // خلفية الحاوية الفاتحة، فما في أي لحظة "وميض أبيض". يُفعَّل فقط بوضع autoPlay.
+  // العلوية بحالة الراحة دائمًا شفافة (opacity 0) وتعرض نفس صورة الطبقة السفلية. الطبقة السفلية
+  // تبقى معتّمة بالكامل طول الوقت فتغطّي خلفية الحاوية الفاتحة، فما في أي لحظة "وميض أبيض".
+  // مهم: تغيير src وopacity بنفس اللحظة (نفس التصيير) كان يمنع انتقال CSS من الانطلاق فعليًا —
+  // خطوتين بفاصل زمني بسيط: أول نغيّر محتوى الطبقة العلوية وهي لسا شفافة (بدون أي تغيّر مرئي)،
+  // بعدين برسم منفصل نرفع شفافيتها لـ 1 فقط (تغيير وحيد)، فينطلق الانتقال بشكل مضمون.
+  // يُفعَّل فقط بوضع autoPlay.
   const [bottomSrc, setBottomSrc] = useState(src);
   const [topSrc, setTopSrc] = useState(src);
   const [topOpacity, setTopOpacity] = useState(0);
   const prevSrcRef = useRef(src);
-  const settleTimerRef = useRef(null);
+  const timersRef = useRef([]);
 
   useEffect(() => {
     if (src === prevSrcRef.current) return;
     prevSrcRef.current = src;
-    clearTimeout(settleTimerRef.current);
+    timersRef.current.forEach(clearTimeout);
     if (!autoPlay) {
       setBottomSrc(src);
       setTopSrc(src);
       setTopOpacity(0);
+      timersRef.current = [];
       return;
     }
     setTopSrc(src);
-    setTopOpacity(1);
-    settleTimerRef.current = setTimeout(() => {
+    setTopOpacity(0);
+    const fadeInTimer = setTimeout(() => setTopOpacity(1), 50);
+    const settleTimer = setTimeout(() => {
       setBottomSrc(src);
       setTopOpacity(0);
     }, 650);
-    return () => clearTimeout(settleTimerRef.current);
+    timersRef.current = [fadeInTimer, settleTimer];
   }, [src, autoPlay]);
 
-  useEffect(() => () => clearTimeout(settleTimerRef.current), []);
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   return (
     <div
