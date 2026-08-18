@@ -4553,28 +4553,46 @@ function resizeImageToDataUrl(file, maxDim) {
   });
 }
 
-// تقرأ ملف صورة منتج مرّة واحدة وترجّع الصورة الأصلية كاملة الدقة (بدون أي ضغط، كما هي دائمًا)
-// بالإضافة إلى نسخة مصغّرة (thumbnail) لعرضها بالبطاقات/الكاروسيلات — الصورة الأصلية تبقى دائمًا
-// مصدر الحقيقة الوحيد، النسخة المصغّرة إضافية فقط لتخفيف حجم التحميل بالأماكن اللي ما تحتاج جودة كاملة
-function readProductImagePair(file, thumbMaxDim = 480) {
+// تقرأ ملف صورة منتج مرّة واحدة وترجّع نسخة "كاملة الدقة" بالإضافة لنسخة مصغّرة (thumbnail) لعرضها
+// بالبطاقات/الكاروسيلات. النسخة "الكاملة" تبقى بحجمها الأصلي تمامًا (بدون أي إعادة ترميز، صفر
+// فقدان جودة) لو كانت أصلًا أصغر من fullMaxDim — تُصغَّر فقط لو أكبر (كاميرات الهواتف تنتج عادة
+// ٤٠٠٠-٦٠٠٠+ بكسل، أكبر بكثير مما يحتاجه حتى التكبير الكامل بالـ Lightbox) بجودة عالية جدًا (٠.٩٢)
+// ما بتلاحَظ بالعين المجردة، لكنها تقلّص حجم الملف ووقت الحفظ كثير لصور الكاميرا الكبيرة جدًا —
+// هاد بالذات هو سبب بطء الحفظ الملحوظ لصنف فيه عدة صور بدقة كاملة (نفس جذر مشكلة تعطّل الموقع
+// السابقة، بس بجهة الكتابة/الحفظ مش القراءة). النسخة المصغّرة تبقى المصدر الأساسي لكل الأماكن
+// اللي ما تحتاج جودة كاملة أصلًا.
+function readProductImagePair(file, thumbMaxDim = 480, fullMaxDim = 2000) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("read failed"));
     reader.onload = () => {
-      const full = reader.result;
+      const raw = reader.result;
       const img = new Image();
       img.onerror = () => reject(new Error("decode failed"));
       img.onload = () => {
-        const scale = Math.min(1, thumbMaxDim / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve({ full, thumbnail: canvas.toDataURL("image/jpeg", 0.82) });
+        let full = raw;
+        const fullScale = Math.min(1, fullMaxDim / Math.max(img.width, img.height));
+        if (fullScale < 1) {
+          const fw = Math.round(img.width * fullScale);
+          const fh = Math.round(img.height * fullScale);
+          const fullCanvas = document.createElement("canvas");
+          fullCanvas.width = fw;
+          fullCanvas.height = fh;
+          fullCanvas.getContext("2d").drawImage(img, 0, 0, fw, fh);
+          full = fullCanvas.toDataURL("image/jpeg", 0.92);
+        }
+
+        const thumbScale = Math.min(1, thumbMaxDim / Math.max(img.width, img.height));
+        const tw = Math.round(img.width * thumbScale);
+        const th = Math.round(img.height * thumbScale);
+        const thumbCanvas = document.createElement("canvas");
+        thumbCanvas.width = tw;
+        thumbCanvas.height = th;
+        thumbCanvas.getContext("2d").drawImage(img, 0, 0, tw, th);
+
+        resolve({ full, thumbnail: thumbCanvas.toDataURL("image/jpeg", 0.82) });
       };
-      img.src = full;
+      img.src = raw;
     };
     reader.readAsDataURL(file);
   });
