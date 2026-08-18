@@ -1247,13 +1247,15 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
     setImgError(false);
   }, [src]);
 
-  // انتقال متدرّج حقيقي بطبقتين (وليس بإعادة تركيب الصورة عبر key) — الطبقة السفلية تبقى معتّمة
-  // بالكامل طول الوقت وتغطي خلفية الحاوية الفاتحة، والطبقة العلوية الجديدة تتلاشى فوقها تدريجيًا،
-  // فما في أي لحظة تنكشف فيها الخلفية (كانت هيي سبب "الوميض الأبيض" بالنسخة الأولى المعتمِدة على
-  // opacity من الصفر مباشرة). يُفعَّل فقط بوضع autoPlay — بقية الحالات تبدّل الصورة فورًا كالسابق
+  // انتقال متدرّج حقيقي بطبقتين ثابتتين بالـ DOM دائمًا (بدون تركيب/فك تركيب أي عنصر) — الطبقة
+  // العلوية بحالة الراحة دائمًا شفافة (opacity 0) وتعرض نفس صورة الطبقة السفلية، فلما توصل صورة
+  // جديدة نغيّر محتواها فقط ونرفع شفافيتها لـ 1 بنفس اللحظة — تغيّر حالة حقيقي بين تصيير وتصيير،
+  // مش "تركيب ثم تعديل فوري" (كان هالنمط السابق أحيانًا ما يشغّل انتقال CSS أصلًا لأنو المتصفح
+  // بيدمج الحالتين بنفس اللحظة رسم واحدة). الطبقة السفلية تبقى معتّمة بالكامل طول الوقت فتغطّي
+  // خلفية الحاوية الفاتحة، فما في أي لحظة "وميض أبيض". يُفعَّل فقط بوضع autoPlay.
   const [bottomSrc, setBottomSrc] = useState(src);
-  const [topSrc, setTopSrc] = useState(null);
-  const [topVisible, setTopVisible] = useState(false);
+  const [topSrc, setTopSrc] = useState(src);
+  const [topOpacity, setTopOpacity] = useState(0);
   const prevSrcRef = useRef(src);
   const settleTimerRef = useRef(null);
 
@@ -1263,24 +1265,17 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
     clearTimeout(settleTimerRef.current);
     if (!autoPlay) {
       setBottomSrc(src);
-      setTopSrc(null);
-      setTopVisible(false);
+      setTopSrc(src);
+      setTopOpacity(0);
       return;
     }
     setTopSrc(src);
-    setTopVisible(false);
-    const raf1 = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setTopVisible(true));
-    });
+    setTopOpacity(1);
     settleTimerRef.current = setTimeout(() => {
       setBottomSrc(src);
-      setTopSrc(null);
-      setTopVisible(false);
-    }, 700);
-    return () => {
-      cancelAnimationFrame(raf1);
-      clearTimeout(settleTimerRef.current);
-    };
+      setTopOpacity(0);
+    }, 650);
+    return () => clearTimeout(settleTimerRef.current);
   }, [src, autoPlay]);
 
   useEffect(() => () => clearTimeout(settleTimerRef.current), []);
@@ -1305,14 +1300,14 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
             onError={() => setImgError(true)}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
           />
-          {topSrc && (
+          {autoPlay && (
             <img
               src={topSrc}
               alt=""
               loading="eager"
               style={{
                 position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
-                opacity: topVisible ? 1 : 0, transition: "opacity 0.6s ease",
+                opacity: topOpacity, transition: "opacity 0.6s ease",
               }}
             />
           )}
