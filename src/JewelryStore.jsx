@@ -658,6 +658,22 @@ function getOrCreateAnonSessionId() {
   }
 }
 
+// أعمدة كل صنف عدا images (الصورة كاملة الدقة) — تُستخدم لجلب قائمة المنتجات الأساسية بسرعة
+// بدون تحميل ميغابايتات الصور كاملة الدقة لكل صنف دفعة وحدة (راجع الملاحظة بمكان الاستخدام).
+// جدول products (لوحة الإدارة) فيه أعمدة إضافية (cost/rep/hidden) مش موجودة بعرض products_public.
+function LEAN_PRODUCT_COLUMNS(table) {
+  const shared =
+    "id,cat,color,name_ar,name_en,name_fr,mat_ar,mat_en,mat_fr,desc_ar,desc_en,desc_fr,price,original_price,stock,sizes,countries,barcode,views,sale_method,weight_grams,metal_type,gold_karat,silver_type,created_at,bead_count,bead_size,featured,thumbnails";
+  return table === "products" ? shared + ",cost,rep,hidden" : shared;
+}
+
+// يجيب الصورة الأصلية كاملة الدقة لصنف واحد بس (images) — تُستدعى فقط عند فتح الصنف فعليًا
+// (بطاقة تفاصيل المنتج أو تعديله بلوحة الإدارة)، مش عند تحميل القائمة كلها دفعة وحدة
+async function fetchFullImages(table, id) {
+  const { data } = await supabase.from(table).select("id,images").eq("id", id).maybeSingle();
+  return data?.images || [];
+}
+
 // تحويل صفوف قاعدة البيانات (Supabase) من/إلى شكل الكائنات المستخدم بالواجهة
 
 function productRowToApp(row) {
@@ -3592,7 +3608,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
   );
 }
 
-function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps, categories, metalGramPrices }) {
+function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, onNeedFullImages, reps, categories, metalGramPrices }) {
   const [confirmId, setConfirmId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [msg, setMsg] = useState("");
@@ -3683,7 +3699,12 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
             ) : (
               <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0">
                 <button
-                  onClick={() => setEditingId(p.id)}
+                  onClick={async () => {
+                    // القائمة الأساسية ما فيها images كاملة الدقة (راجع ملاحظة التحميل الأولي) —
+                    // لازم نجيبها قبل ما نفتح نموذج التعديل، وإلا الحفظ بيمسح صور الصنف الموجودة
+                    if (!p.images || p.images.length === 0) await onNeedFullImages(p.id);
+                    setEditingId(p.id);
+                  }}
                   className="flex-1 sm:flex-none text-xs px-3 py-2 rounded-sm border"
                   style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
                 >
@@ -5173,11 +5194,14 @@ export default function JewelryStore() {
       const orderItemsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "order_items" : "order_items_customer";
 
       // المنتجات تحمل صور Base64 داخل الأعمدة (لا يوجد Storage bucket بهالمشروع، راجع الملاحظات
-      // بالأعلى) فحجمها وبالتالي وقت جلبها أكبر بكثير من باقي الجداول (لوحظ ~4.6 ثانية مقابل أقل
-      // من ثانية للباقي) — منفصلة عمدًا عن الدفعة الرئيسية حتى ما توقّف ظهور الطلبات/التصنيفات/
-      // الأسعار وباقي الواجهة (بما فيها "طلباتي" ولوحة الإدارة) بانتظارها؛ تتحدّث لوحدها فور وصولها
-      supabase.from(productsTable).select("*").order("created_at").then(({ data }) => {
-        if (data) setRawProducts(data.map(productRowToApp));
+      // بالأعلى)، وصار حجمها كبير جدًا مؤخرًا (منتجات جديدة بعدة صور كاملة الدقة، كل صنف ممكن
+      // يوصل ١٠+ ميغابايت) لدرجة إنو جلب images/thumbnails لكل الأصناف دفعة وحدة صار يتسبب بخطأ
+      // 57014 (statement timeout) من Postgres ويكسّر الموقع بالكامل (تأكّد مباشرة 2026-08-18).
+      // الحل: القائمة الأساسية تجيب كل الأعمدة عدا images (الصورة كاملة الدقة) — تبقى thumbnails
+      // (صغيرة) كافية لكل البطاقات/الكاروسيلات. الصورة الكاملة تُجلب لصنف واحد بس عند فتحه فعليًا
+      // (product أو تعديل بلوحة الإدارة) عبر fetchFullImages تحت — أسرع بكثير من جلب الكل دفعة وحدة.
+      supabase.from(productsTable).select(LEAN_PRODUCT_COLUMNS(productsTable)).order("created_at").then(({ data }) => {
+        if (data) setRawProducts(data.map((row) => productRowToApp({ ...row, images: row.images || [] })));
       });
 
       const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes] = await Promise.all([
@@ -5374,6 +5398,16 @@ export default function JewelryStore() {
     setSizeRequest("");
     setLightboxOpen(false);
     trackView(product.id);
+    // القائمة الأساسية ما فيها images (الصورة كاملة الدقة، راجع الملاحظة عند التحميل الأولي) —
+    // نجيبها الآن فقط لهالصنف بالذات، ونحدّث حالة كل من selected وrawProducts معًا
+    if (!product.images || product.images.length === 0) {
+      const table = IS_ADMIN_DOMAIN && session ? "products" : "products_public";
+      fetchFullImages(table, product.id).then((images) => {
+        if (images.length === 0) return;
+        setSelected((s) => (s && s.id === product.id ? { ...s, images } : s));
+        setRawProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, images } : p)));
+      });
+    }
   };
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
@@ -5557,6 +5591,10 @@ export default function JewelryStore() {
                 if (error) return false;
                 setRawProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
                 return true;
+              }}
+              onNeedFullImages={async (id) => {
+                const images = await fetchFullImages("products", id);
+                setRawProducts((prev) => prev.map((p) => (p.id === id ? { ...p, images } : p)));
               }}
               reps={reps}
               categories={categories}
