@@ -658,20 +658,17 @@ function getOrCreateAnonSessionId() {
   }
 }
 
-// أعمدة كل صنف عدا images (الصورة كاملة الدقة) — تُستخدم لجلب قائمة المنتجات الأساسية بسرعة
-// بدون تحميل ميغابايتات الصور كاملة الدقة لكل صنف دفعة وحدة (راجع الملاحظة بمكان الاستخدام).
-// جدول products (لوحة الإدارة) فيه أعمدة إضافية (cost/rep/hidden) مش موجودة بعرض products_public.
-function LEAN_PRODUCT_COLUMNS(table) {
+// أعمدة كل صنف لجلب قائمة المنتجات الأساسية. جدول products (لوحة الإدارة) فيه أعمدة إضافية
+// (cost/rep/hidden) مش موجودة بعرض products_public. images/thumbnails/originals كلها روابط
+// Storage خفيفة (مش base64) فما في داعي لاستثنائها من الجلب الأساسي — راجع خطة الانتقال لـ
+// Supabase Storage: كانت هاي الدالة تستثني images عمدًا قبل الانتقال لتفادي جلب ميغابايتات base64
+// دفعة وحدة (كان يسبب 57014 statement timeout، تأكّد 2026-08-18)، ما عاد هالتحفّظ لازم.
+function PRODUCT_COLUMNS(table) {
   const shared =
-    "id,cat,color,name_ar,name_en,name_fr,mat_ar,mat_en,mat_fr,desc_ar,desc_en,desc_fr,price,original_price,stock,sizes,countries,barcode,views,sale_method,weight_grams,metal_type,gold_karat,silver_type,created_at,bead_count,bead_size,featured,thumbnails";
-  return table === "products" ? shared + ",cost,rep,hidden" : shared;
-}
-
-// يجيب الصورة الأصلية كاملة الدقة لصنف واحد بس (images) — تُستدعى فقط عند فتح الصنف فعليًا
-// (بطاقة تفاصيل المنتج أو تعديله بلوحة الإدارة)، مش عند تحميل القائمة كلها دفعة وحدة
-async function fetchFullImages(table, id) {
-  const { data } = await supabase.from(table).select("id,images").eq("id", id).maybeSingle();
-  return data?.images || [];
+    "id,cat,color,name_ar,name_en,name_fr,mat_ar,mat_en,mat_fr,desc_ar,desc_en,desc_fr,price,original_price,stock,sizes,countries,barcode,views,sale_method,weight_grams,metal_type,gold_karat,silver_type,created_at,bead_count,bead_size,featured,images,thumbnails";
+  // originals (الصورة الأصلية بدون أي تصغير) موجودة بجدول products فقط، متعمّد عدم إضافتها
+  // لعرض products_public — الزبون ما إله أي داعي يشوفها أو يحمّلها إطلاقًا
+  return table === "products" ? shared + ",cost,rep,hidden,originals" : shared;
 }
 
 // تحويل صفوف قاعدة البيانات (Supabase) من/إلى شكل الكائنات المستخدم بالواجهة
@@ -691,6 +688,7 @@ function productRowToApp(row) {
     sizes: row.sizes || [],
     images: row.images || [],
     thumbnails: row.thumbnails || [],
+    originals: row.originals || [],
     countries: row.countries || [],
     rep: row.rep || "",
     barcode: row.barcode || "",
@@ -723,6 +721,7 @@ function productAppToRow(p) {
     sizes: p.sizes || [],
     images: p.images || [],
     thumbnails: p.thumbnails || [],
+    originals: p.originals || [],
     countries: p.countries || [],
     rep: p.rep || null,
     barcode: p.barcode || null,
@@ -914,6 +913,7 @@ const T = {
   countriesLabel: { ar: "متوفر في", en: "Available In", fr: "Disponible en" },
   saveProduct: { ar: "حفظ الصنف", en: "Save Product", fr: "Enregistrer le Produit" },
   productSaved: { ar: "تمت إضافة الصنف بنجاح", en: "Product added successfully", fr: "Produit ajouté avec succès" },
+  uploadingImages: { ar: "جاري رفع الصور...", en: "Uploading images...", fr: "Téléversement des images..." },
   fillRequired: { ar: "يرجى تعبئة الاسم والسعر على الأقل", en: "Please fill in at least the name and price", fr: "Veuillez remplir au moins le nom et le prix" },
   invalidPrice: { ar: "يجب أن يكون سعر البيع أكبر من صفر", en: "Sale price must be greater than zero", fr: "Le prix de vente doit être supérieur à zéro" },
   invalidCost: { ar: "لا يمكن أن تكون التكلفة رقمًا سالبًا", en: "Cost cannot be a negative number", fr: "Le coût ne peut pas être négatif" },
@@ -1225,9 +1225,9 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
   const isString = product.cat === "masabih" || product.cat === "bracelets";
   const images = product.images || [];
   const thumbs = product.thumbnails || [];
-  // قائمة القائمة الأساسية ما فيها images (كاملة الدقة) عمدًا — راجع ملاحظة LEAN_PRODUCT_COLUMNS —
-  // فلازم نعتمد على thumbnails لتحديد "كم صورة عند هالصنف" و"فهرسة العرض" كمصدر أساسي، مش images،
-  // وإلا كل صنف لسا ما انفتح مرّة رح يبان بدون صورة أبدًا بالبطاقات رغم وجود نسخته المصغّرة فعليًا
+  // thumbnails هي المصدر الأساسي لتحديد "كم صورة عند هالصنف" و"فهرسة العرض" (أخف من images
+  // وكافية لكل استخدامات البطاقات/الكاروسيلات) — images fallback فقط لصنف قديم استثنائي بدون
+  // نسخ مصغّرة لأي سبب
   const countSource = thumbs.length > 0 ? thumbs : images;
 
   // فهارس الصور الفريدة فقط (بدون تكرار نفس الصورة الأصلية بالغلط) — تُستخدم فقط بوضع autoPlay
@@ -1261,9 +1261,9 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
     ? uniqueIndices[autoPos] ?? 0
     : Math.min(imageIndex, Math.max(countSource.length - 1, 0));
 
-  // بوضع "full" (بطاقة تفاصيل الصنف واللايت بوكس): الصورة كاملة الدقة تتأخر ~3 ثواني عن فتح
-  // الصنف (تُجلب عند الطلب فقط، راجع fetchFullImages) — تعرض النسخة المصغّرة (already متوفرة
-  // فورًا بالقائمة الأساسية) كبديل مؤقت بدل شاشة فاضية، وتتبدّل تلقائيًا للصورة الكاملة فور وصولها
+  // بوضع "full": يفضّل الصورة كاملة الدقة، ويرجع للنسخة المصغّرة فقط كحماية احتياطية (مثلًا لو
+  // فشل رفع الصورة الكاملة لـ Storage جزئيًا) — عمليًا الاثنتان متوفرتان فورًا اليوم لأن كل
+  // الأعمدة تُجلب دفعة وحدة (روابط Storage خفيفة، راجع خطة الانتقال من base64)
   const src = variant === "full" ? (images[activeIndex] || thumbs[activeIndex] || null) : (thumbs[activeIndex] || images[activeIndex] || null);
   const hasPhoto = !!src && !imgError;
 
@@ -1630,11 +1630,12 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
   const [form, setForm] = useState({
     nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
     descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
-    color: "#B9A576", countries: [], images: [], thumbnails: [], sizesText: "", rep: "",
+    color: "#B9A576", countries: [], images: [], thumbnails: [], originals: [], sizesText: "", rep: "",
     saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
     beadCount: "", beadSize: "", featured: false,
   });
   const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // قواعد التصنيف المختار — تحدد الحقول اللي لازم تظهر وتلقّن طريقة البيع الافتراضية (يقدر
   // المشرف يغيّرها يدويًا بعدين، مش قفل صارم — راجع القرار المتفق عليه بخطة نظام قواعد التصنيفات)
@@ -1752,8 +1753,13 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     e.target.value = "";
     for (const file of files) {
       try {
-        const { full, thumbnail } = await readProductImagePair(file);
-        setForm((f) => ({ ...f, images: [...f.images, full], thumbnails: [...f.thumbnails, thumbnail] }));
+        const { full, thumbnail, original } = await readProductImagePair(file);
+        setForm((f) => ({
+          ...f,
+          images: [...f.images, full],
+          thumbnails: [...f.thumbnails, thumbnail],
+          originals: [...f.originals, original],
+        }));
       } catch {
         // تجاهل ملف فشلت قراءته/فك ترميزه، تابع البقية
       }
@@ -1765,6 +1771,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       ...f,
       images: f.images.filter((_, i) => i !== idx),
       thumbnails: f.thumbnails.filter((_, i) => i !== idx),
+      originals: f.originals.filter((_, i) => i !== idx),
     }));
 
   const isWeightSale = form.saleMethod === "weight";
@@ -1776,6 +1783,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     : 0;
 
   const submit = async () => {
+    if (saving) return;
     if (!form.nameAr && !form.nameEn) {
       setMsg(T.fillRequired[lang]);
       return;
@@ -1821,12 +1829,26 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     }
     const id = "custom-" + Date.now();
     const barcode = generateBarcode(products.map((p) => p.barcode).filter(Boolean));
+    setSaving(true);
+    let uploadedImages, uploadedThumbnails, uploadedOriginals;
+    try {
+      [uploadedImages, uploadedThumbnails, uploadedOriginals] = await Promise.all([
+        uploadProductAssetList(id, form.images, "full"),
+        uploadProductAssetList(id, form.thumbnails, "thumb"),
+        uploadProductAssetList(id, form.originals, "original"),
+      ]);
+    } catch {
+      setSaving(false);
+      setMsg(T.updateFailed[lang]);
+      return;
+    }
     const ok = await onSave({
       id,
       cat: form.cat,
       color: form.color,
-      images: form.images,
-      thumbnails: form.thumbnails,
+      images: uploadedImages,
+      thumbnails: uploadedThumbnails,
+      originals: uploadedOriginals,
       name: { ar: form.nameAr || form.nameEn, en: form.nameEn || form.nameAr, fr: form.nameFr || form.nameEn || form.nameAr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
@@ -1847,6 +1869,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
       featured: form.featured,
     });
+    setSaving(false);
     if (!ok) {
       setMsg(T.updateFailed[lang]);
       return;
@@ -1856,7 +1879,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
     setForm({
       nameAr: "", nameEn: "", nameFr: "", matAr: "", matEn: "", matFr: "",
       descAr: "", descEn: "", descFr: "", cat: "rings", price: "", originalPrice: "", cost: "", stock: "",
-      color: "#B9A576", countries: [], images: [], thumbnails: [], sizesText: "", rep: "",
+      color: "#B9A576", countries: [], images: [], thumbnails: [], originals: [], sizesText: "", rep: "",
       saleMethod: "piece", metalType: "gold", goldKarat: 18, silverType: "male", weightGrams: "",
       beadCount: "", beadSize: "", featured: false,
     });
@@ -2123,7 +2146,9 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
       </div>
 
       {msg && <p className="text-sm mb-3" style={{ color: THEME.goldSoft }}>{msg}</p>}
-      <button onClick={submit} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">{T.saveProduct[lang]}</button>
+      <button onClick={submit} disabled={saving} className="w-full py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold" style={{ opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
+        {saving ? T.uploadingImages[lang] : T.saveProduct[lang]}
+      </button>
     </div>
   );
 }
@@ -3289,6 +3314,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
     // بمكانها (تعتمد على fallback الصورة الأصلية بـ ProductVisual)، حتى ما تنخلط الفهارس لما يُضاف
     // صنف صورة جديدة فوق صور قديمة غير مُحدَّثة
     thumbnails: (product.images || []).map((_, i) => (product.thumbnails && product.thumbnails[i]) || null),
+    originals: (product.images || []).map((_, i) => (product.originals && product.originals[i]) || null),
     rep: product.rep || "",
     saleMethod: product.saleMethod || "piece",
     metalType: product.metalType || "gold",
@@ -3319,8 +3345,13 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
     e.target.value = "";
     for (const file of files) {
       try {
-        const { full, thumbnail } = await readProductImagePair(file);
-        setForm((f) => ({ ...f, images: [...f.images, full], thumbnails: [...f.thumbnails, thumbnail] }));
+        const { full, thumbnail, original } = await readProductImagePair(file);
+        setForm((f) => ({
+          ...f,
+          images: [...f.images, full],
+          thumbnails: [...f.thumbnails, thumbnail],
+          originals: [...f.originals, original],
+        }));
       } catch {
         // تجاهل ملف فشلت قراءته/فك ترميزه، تابع البقية
       }
@@ -3331,12 +3362,14 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       ...f,
       images: f.images.filter((_, i) => i !== idx),
       thumbnails: f.thumbnails.filter((_, i) => i !== idx),
+      originals: f.originals.filter((_, i) => i !== idx),
     }));
 
   const inputStyle = { background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory };
 
   const [repError, setRepError] = useState(false);
   const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const isWeightSale = form.saleMethod === "weight";
   const weightPricePreview = isWeightSale
@@ -3380,12 +3413,27 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       setRepError(true);
       return;
     }
+    if (saving) return;
+    setSaving(true);
+    let uploadedImages, uploadedThumbnails, uploadedOriginals;
+    try {
+      [uploadedImages, uploadedThumbnails, uploadedOriginals] = await Promise.all([
+        uploadProductAssetList(product.id, form.images, "full"),
+        uploadProductAssetList(product.id, form.thumbnails, "thumb"),
+        uploadProductAssetList(product.id, form.originals, "original"),
+      ]);
+    } catch {
+      setSaving(false);
+      setFormError(T.updateFailed[lang]);
+      return;
+    }
     const ok = await onSave({
       ...product,
       cat: form.cat,
       color: form.color,
-      images: form.images,
-      thumbnails: form.thumbnails,
+      images: uploadedImages,
+      thumbnails: uploadedThumbnails,
+      originals: uploadedOriginals,
       name: { ar: form.nameAr, en: form.nameEn, fr: form.nameFr },
       mat: { ar: form.matAr, en: form.matEn, fr: form.matFr },
       desc: { ar: form.descAr, en: form.descEn, fr: form.descFr },
@@ -3405,7 +3453,18 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
       beadSize: selectedCategory?.requiresBeadSize ? form.beadSize.trim() || null : null,
       featured: form.featured,
     });
-    if (!ok) setFormError(T.updateFailed[lang]);
+    setSaving(false);
+    if (!ok) {
+      setFormError(T.updateFailed[lang]);
+      return;
+    }
+    // بعد نجاح الحفظ فقط: أي رابط Storage كان موجود بالصنف الأصلي وما عاد موجود بالنتيجة النهائية
+    // (المشرف أزاله أثناء التعديل) ينحذف فعليًا من التخزين — التنظيف بعد التأكد من نجاح الحفظ
+    // فقط، حتى لو فشل الحفظ لأي سبب ما نحذف صور لسا مرتبطة بالصنف
+    const kept = new Set([...uploadedImages, ...uploadedThumbnails, ...uploadedOriginals]);
+    const removed = [...(product.images || []), ...(product.thumbnails || []), ...(product.originals || [])]
+      .filter((url) => !kept.has(url));
+    removeProductAssets(removed);
   };
 
   return (
@@ -3608,7 +3667,9 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
 
         {formError && <p className="text-xs mb-3" style={{ color: "#E07A7A" }}>{formError}</p>}
         <div className="flex gap-3">
-          <button onClick={submit} className="flex-1 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold">{T.saveChanges[lang]}</button>
+          <button onClick={submit} disabled={saving} className="flex-1 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold" style={{ opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
+            {saving ? T.uploadingImages[lang] : T.saveChanges[lang]}
+          </button>
           <button onClick={onCancel} className="px-6 py-3 rounded-sm text-sm border" style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}>{T.confirmCancel[lang]}</button>
         </div>
       </div>
@@ -3616,7 +3677,7 @@ function AdminEditProduct({ lang, product, onSave, onCancel, reps, categories, m
   );
 }
 
-function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, onNeedFullImages, reps, categories, metalGramPrices }) {
+function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide, onEdit, reps, categories, metalGramPrices }) {
   const [confirmId, setConfirmId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [msg, setMsg] = useState("");
@@ -3707,12 +3768,7 @@ function AdminManageProducts({ lang, products, fmtPrice, onDelete, onToggleHide,
             ) : (
               <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0">
                 <button
-                  onClick={async () => {
-                    // القائمة الأساسية ما فيها images كاملة الدقة (راجع ملاحظة التحميل الأولي) —
-                    // لازم نجيبها قبل ما نفتح نموذج التعديل، وإلا الحفظ بيمسح صور الصنف الموجودة
-                    if (!p.images || p.images.length === 0) await onNeedFullImages(p.id);
-                    setEditingId(p.id);
-                  }}
+                  onClick={() => setEditingId(p.id)}
                   className="flex-1 sm:flex-none text-xs px-3 py-2 rounded-sm border"
                   style={{ borderColor: THEME.surfaceLine, color: THEME.ivoryDim }}
                 >
@@ -4594,12 +4650,54 @@ function readProductImagePair(file, thumbMaxDim = 480, fullMaxDim = 2000) {
         thumbCanvas.height = th;
         thumbCanvas.getContext("2d").drawImage(img, 0, 0, tw, th);
 
-        resolve({ full, thumbnail: thumbCanvas.toDataURL("image/jpeg", 0.82) });
+        // "original" هو الملف الخام كما ورفعه المشرف بدون أي تصغير أو ضغط إطلاقًا — يُخزَّن
+        // بـ Storage كطبقة أرشيفية بأعلى جودة ممكنة، ما تستخدمه أي صفحة تواجه الزبون (راجع
+        // uploadProductAsset تحت)، فما إله أي تكلفة على سرعة التصفح العادي
+        resolve({ full, thumbnail: thumbCanvas.toDataURL("image/jpeg", 0.82), original: raw });
       };
       img.src = raw;
     };
     reader.readAsDataURL(file);
   });
+}
+
+// يرفع صورة واحدة (base64 محلي) إلى Supabase Storage ويرجّع رابطها العام، أو يعيد نفس القيمة
+// كما هي لو كانت أصلًا رابط Storage (يعني صورة موجودة من قبل ما تغيّرت بهالحفظة — لا داعي لإعادة
+// رفعها). productId لازم يكون معروف مسبقًا (الصنف الجديد ياخذ id فور توليده بدالة submit، قبل
+// أي رفع) — راجع خطة الانتقال من base64 داخل قاعدة البيانات إلى Storage حقيقي + CDN
+async function uploadProductAsset(productId, dataUrl, kind, index) {
+  if (!dataUrl || !dataUrl.startsWith("data:")) return dataUrl;
+  const blob = await (await fetch(dataUrl)).blob();
+  const path = `${productId}/${kind}-${index}-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from("product-images").upload(path, blob, {
+    contentType: "image/jpeg",
+    cacheControl: "31536000",
+  });
+  if (error) throw error;
+  return supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl;
+}
+
+// يرفع مصفوفة كاملة (images أو thumbnails أو originals) بالتوازي — الترتيب مضمون لأن كل نتيجة
+// بترجع لنفس فهرسها الأصلي بغض النظر عن ترتيب اكتمال الرفع (Promise.all يحافظ على ترتيب الإدخال)
+async function uploadProductAssetList(productId, dataUrls, kind) {
+  return Promise.all((dataUrls || []).map((src, i) => uploadProductAsset(productId, src, kind, i)));
+}
+
+// يستخرج مسار الملف داخل الـ bucket من رابط Storage العام — يرجّع null لو الرابط مو من هالـ
+// bucket أصلًا (مثلًا صنف قديم لسا ما انتقل بعد ولا يزال يحمل base64)
+function storagePathFromUrl(url) {
+  if (typeof url !== "string") return null;
+  const marker = "/object/public/product-images/";
+  const i = url.indexOf(marker);
+  return i === -1 ? null : url.slice(i + marker.length);
+}
+
+// يحذف مجموعة روابط Storage عامة دفعة وحدة (يتجاهل بصمت أي رابط مو من هالـ bucket، مثل صور
+// المنتجات القديمة اللي لسا ما انتقلت) — تُستخدم عند حذف صنف كامل أو عند إزالة صور محدّدة بالتعديل
+async function removeProductAssets(urls) {
+  const paths = (urls || []).map(storagePathFromUrl).filter(Boolean);
+  if (paths.length === 0) return;
+  await supabase.storage.from("product-images").remove(paths);
 }
 
 function CustomerAccountModal({ lang, session, customerProfile, orders, products, storeInfo, fmtPrice, onClose, onAuthed, onProfileUpdate }) {
@@ -5220,15 +5318,10 @@ export default function JewelryStore() {
       // عرض order_items_customer المقيّد الأعمدة فقط، مش الجدول الأساسي
       const orderItemsTable = IS_ADMIN_DOMAIN && sessionData?.session ? "order_items" : "order_items_customer";
 
-      // المنتجات تحمل صور Base64 داخل الأعمدة (لا يوجد Storage bucket بهالمشروع، راجع الملاحظات
-      // بالأعلى)، وصار حجمها كبير جدًا مؤخرًا (منتجات جديدة بعدة صور كاملة الدقة، كل صنف ممكن
-      // يوصل ١٠+ ميغابايت) لدرجة إنو جلب images/thumbnails لكل الأصناف دفعة وحدة صار يتسبب بخطأ
-      // 57014 (statement timeout) من Postgres ويكسّر الموقع بالكامل (تأكّد مباشرة 2026-08-18).
-      // الحل: القائمة الأساسية تجيب كل الأعمدة عدا images (الصورة كاملة الدقة) — تبقى thumbnails
-      // (صغيرة) كافية لكل البطاقات/الكاروسيلات. الصورة الكاملة تُجلب لصنف واحد بس عند فتحه فعليًا
-      // (product أو تعديل بلوحة الإدارة) عبر fetchFullImages تحت — أسرع بكثير من جلب الكل دفعة وحدة.
-      supabase.from(productsTable).select(LEAN_PRODUCT_COLUMNS(productsTable)).order("created_at").then(({ data }) => {
-        if (data) setRawProducts(data.map((row) => productRowToApp({ ...row, images: row.images || [] })));
+      // صور المنتجات مخزّنة بـ Supabase Storage (روابط خفيفة بالأعمدة، مش base64) — الجلب
+      // الأساسي بجيب كل الأعمدة دفعة وحدة بأمان (راجع خطة الانتقال لـ Storage).
+      supabase.from(productsTable).select(PRODUCT_COLUMNS(productsTable)).order("created_at").then(({ data }) => {
+        if (data) setRawProducts(data.map(productRowToApp));
       });
 
       const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes, siteVisitsRes] = await Promise.all([
@@ -5442,16 +5535,6 @@ export default function JewelryStore() {
     setSizeRequest("");
     setLightboxOpen(false);
     trackView(product.id);
-    // القائمة الأساسية ما فيها images (الصورة كاملة الدقة، راجع الملاحظة عند التحميل الأولي) —
-    // نجيبها الآن فقط لهالصنف بالذات، ونحدّث حالة كل من selected وrawProducts معًا
-    if (!product.images || product.images.length === 0) {
-      const table = IS_ADMIN_DOMAIN && session ? "products" : "products_public";
-      fetchFullImages(table, product.id).then((images) => {
-        if (images.length === 0) return;
-        setSelected((s) => (s && s.id === product.id ? { ...s, images } : s));
-        setRawProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, images } : p)));
-      });
-    }
   };
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
@@ -5620,6 +5703,12 @@ export default function JewelryStore() {
                 const { error } = await supabase.from("products").delete().eq("id", id);
                 if (error) return false;
                 setRawProducts((prev) => prev.filter((p) => p.id !== id));
+                // تنظيف Storage بعد نجاح حذف الصف مباشرة — list() بادئة معرّف الصنف بترجع كل
+                // ملفاته (thumb/full/original) بغض النظر عن عددها، بدون داعي لمعرفة الروابط نفسها
+                const { data: files } = await supabase.storage.from("product-images").list(id);
+                if (files && files.length > 0) {
+                  await supabase.storage.from("product-images").remove(files.map((f) => `${id}/${f.name}`));
+                }
                 return true;
               }}
               onToggleHide={async (id) => {
@@ -5635,10 +5724,6 @@ export default function JewelryStore() {
                 if (error) return false;
                 setRawProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
                 return true;
-              }}
-              onNeedFullImages={async (id) => {
-                const images = await fetchFullImages("products", id);
-                setRawProducts((prev) => prev.map((p) => (p.id === id ? { ...p, images } : p)));
               }}
               reps={reps}
               categories={categories}
