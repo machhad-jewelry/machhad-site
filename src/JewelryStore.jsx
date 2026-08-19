@@ -4037,9 +4037,9 @@ function AdminSales({ lang, orders, products, customers, storeInfo, fmtPrice, on
   const countryLabelEn = (id) => COUNTRIES.find((c) => c.id === id)?.en || id;
   const paymentLabelEn = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.en || id;
 
-  const downloadInvoice = (order) => {
+  const downloadInvoice = async (order) => {
     const customer = customers.find((c) => c.id === order.customerId);
-    downloadInvoicePdf({
+    await downloadInvoicePdf({
       order,
       products,
       storeInfo,
@@ -4752,8 +4752,8 @@ function CustomerAccountModal({ lang, session, customerProfile, orders, products
   const countryLabelEn = (id) => COUNTRIES.find((c) => c.id === id)?.en || id;
   const paymentLabelEn = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.en || id;
 
-  const downloadInvoice = (order) => {
-    downloadInvoicePdf({
+  const downloadInvoice = async (order) => {
+    await downloadInvoicePdf({
       order,
       products,
       storeInfo,
