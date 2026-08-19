@@ -1261,7 +1261,10 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
     ? uniqueIndices[autoPos] ?? 0
     : Math.min(imageIndex, Math.max(countSource.length - 1, 0));
 
-  const src = variant === "full" ? (images[activeIndex] || null) : (thumbs[activeIndex] || images[activeIndex] || null);
+  // بوضع "full" (بطاقة تفاصيل الصنف واللايت بوكس): الصورة كاملة الدقة تتأخر ~3 ثواني عن فتح
+  // الصنف (تُجلب عند الطلب فقط، راجع fetchFullImages) — تعرض النسخة المصغّرة (already متوفرة
+  // فورًا بالقائمة الأساسية) كبديل مؤقت بدل شاشة فاضية، وتتبدّل تلقائيًا للصورة الكاملة فور وصولها
+  const src = variant === "full" ? (images[activeIndex] || thumbs[activeIndex] || null) : (thumbs[activeIndex] || images[activeIndex] || null);
   const hasPhoto = !!src && !imgError;
 
   useEffect(() => {
