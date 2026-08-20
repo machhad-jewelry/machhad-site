@@ -6029,7 +6029,7 @@ export default function JewelryStore() {
           <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
             {T.shopByCategory[lang]}
           </p>
-          <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+          <div className="flex flex-wrap justify-center gap-6 sm:gap-9">
             {categories
               .filter((c) => c.active !== false)
               .slice()
@@ -6041,26 +6041,23 @@ export default function JewelryStore() {
                     setCategory(c.id);
                     document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" });
                   }}
-                  className="relative overflow-hidden rounded-sm group"
-                  style={{ width: 168, height: 168, border: `1px solid ${THEME.surfaceLine}` }}
+                  className="flex flex-col items-center gap-2.5 flex-shrink-0"
                 >
-                  {c.image ? (
-                    <img
-                      src={c.image}
-                      alt={c.name[lang]}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center" style={{ background: THEME.bgSoft }}>
-                      <Gemstone size={40} />
-                    </div>
-                  )}
                   <div
-                    className="absolute inset-0 flex items-end justify-center pb-3"
-                    style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), transparent 60%)" }}
+                    className="rounded-full overflow-hidden transition-colors duration-200"
+                    style={{ width: 76, height: 76, border: `1px solid ${THEME.surfaceLine}` }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = THEME.gold; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = THEME.surfaceLine; }}
                   >
-                    <span className="text-xs uppercase tracking-widest text-white">{c.name[lang]}</span>
+                    {c.image ? (
+                      <img src={c.image} alt={c.name[lang]} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: THEME.bgSoft }}>
+                        <Gemstone size={26} color={THEME.goldSoft} />
+                      </div>
+                    )}
                   </div>
+                  <span className="text-[11px]" style={{ color: THEME.ivoryDim }}>{c.name[lang]}</span>
                 </button>
               ))}
           </div>
