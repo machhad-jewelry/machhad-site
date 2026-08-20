@@ -838,6 +838,16 @@ const T = {
   trendingNow: { ar: "رائج الآن", en: "Trending Now", fr: "Tendance Actuelle" },
   recentlyViewed: { ar: "شوهد مؤخرًا", en: "Recently Viewed", fr: "Vu Récemment" },
   relatedProducts: { ar: "قد يعجبك أيضًا", en: "You May Also Like", fr: "Vous Aimerez Aussi" },
+  reviewsTitle: { ar: "التقييمات", en: "Reviews", fr: "Avis" },
+  noReviewsYet: { ar: "لا يوجد تقييمات بعد", en: "No reviews yet", fr: "Aucun avis pour le moment" },
+  writeReview: { ar: "شارك رأيك بهالمنتج", en: "Share your thoughts on this product", fr: "Partagez votre avis sur ce produit" },
+  yourRating: { ar: "تقييمك", en: "Your rating", fr: "Votre note" },
+  reviewCommentPlaceholder: { ar: "اكتب رأيك (اختياري)...", en: "Write your review (optional)...", fr: "Écrivez votre avis (facultatif)..." },
+  submitReview: { ar: "إرسال التقييم", en: "Submit Review", fr: "Envoyer l'avis" },
+  reviewSelectRating: { ar: "اختر عدد النجوم أولًا", en: "Please select a star rating first", fr: "Veuillez d'abord choisir une note" },
+  reviewSubmitFailed: { ar: "تعذّر إرسال التقييم", en: "Could not submit review", fr: "Échec de l'envoi de l'avis" },
+  alreadyReviewed: { ar: "شكرًا، قيّمت هالمنتج من قبل", en: "Thanks — you've already reviewed this product", fr: "Merci — vous avez déjà évalué ce produit" },
+  reviewEligibilityNote: { ar: "تقدر تكتب تقييمك بعد استلام هالمنتج ضمن طلب سابق", en: "You can review this product after receiving it in a past order", fr: "Vous pourrez évaluer ce produit après l'avoir reçu dans une commande" },
   popularProducts: { ar: "الأكثر رواجًا", en: "Popular Products", fr: "Produits Populaires" },
   chooseCountry: { ar: "تسوّق حسب البلد", en: "Shop by Country", fr: "Acheter par Pays" },
   allCountries: { ar: "كل البلدان", en: "All Countries", fr: "Tous les Pays" },
@@ -1362,10 +1372,33 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
   );
 }
 
+// عرض تقييم بالنجوم (نسبة مئوية جزئية، ليست فقط نجوم كاملة) — طبقتان: نجوم فارغة بالخلفية، نجوم
+// ذهبية ممتلئة فوقها مقصوصة بعرض يساوي (rating/5) — بدون أي مكتبة خارجية
+function StarRating({ value = 0, size = 13 }) {
+  const pct = Math.max(0, Math.min(100, (value / 5) * 100));
+  const Stars = ({ color }) => (
+    <div style={{ display: "flex", gap: 1.5, color }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <svg key={i} width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.6 6.6-.9z" />
+        </svg>
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+      <Stars color={THEME.surfaceLine} />
+      <div style={{ position: "absolute", inset: 0, width: `${pct}%`, overflow: "hidden" }}>
+        <Stars color={THEME.goldSoft} />
+      </div>
+    </div>
+  );
+}
+
 // شريط تمرير أفقي عام لمنتجات، معاد استخدامه لكل أقسام الصفحة الرئيسية الجديدة (وصل حديثًا، مميزة،
 // مُوصى بها، رائجة، شوهدت مؤخرًا) — نفس نمط شريط "الأكثر مشاهدة" الحالي المُختبَر مسبقًا، بس كمكوّن
 // عام قابل لإعادة الاستخدام بدل تكرار نفس الـ JSX ٥-٦ مرات
-function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, onOpen, favorites, onToggleFavorite }) {
+function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, onOpen, favorites, onToggleFavorite, ratingSummary }) {
   const scrollRef = useRef(null);
   if (!products || products.length === 0) return null;
   return (
@@ -1401,6 +1434,12 @@ function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, 
                 )}
               </div>
               <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
+              {ratingSummary?.(p.id) && (
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <StarRating value={ratingSummary(p.id).avg} size={9} />
+                  <span className="text-[9.5px]" style={{ color: THEME.ivoryDim }}>({ratingSummary(p.id).count})</span>
+                </div>
+              )}
               <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                 <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
                 {p.originalPrice > p.price && (
@@ -5141,6 +5180,11 @@ export default function JewelryStore() {
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [reviewRatingInput, setReviewRatingInput] = useState(0);
+  const [reviewCommentInput, setReviewCommentInput] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
   const mostViewedScrollRef = useRef(null);
 
   useEffect(() => {
@@ -5153,6 +5197,35 @@ export default function JewelryStore() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  const submitReview = async (productId) => {
+    if (!session) return;
+    if (reviewRatingInput < 1) { setReviewError(T.reviewSelectRating[lang]); return; }
+    setReviewSubmitting(true);
+    setReviewError("");
+    const { data, error } = await supabase
+      .from("reviews")
+      .insert({
+        product_id: productId,
+        customer_id: session.user.id,
+        customer_name: customerName || customerProfile?.name || "",
+        rating: reviewRatingInput,
+        comment: reviewCommentInput.trim() || null,
+      })
+      .select()
+      .single();
+    setReviewSubmitting(false);
+    if (error || !data) {
+      setReviewError(T.reviewSubmitFailed[lang]);
+      return;
+    }
+    setReviews((prev) => [
+      { id: data.id, product_id: data.product_id, customer_name: data.customer_name, rating: data.rating, comment: data.comment, created_at: data.created_at },
+      ...prev,
+    ]);
+    setReviewRatingInput(0);
+    setReviewCommentInput("");
   };
 
   useEffect(() => {
@@ -5365,7 +5438,7 @@ export default function JewelryStore() {
         if (data) setRawProducts(data.map(productRowToApp));
       });
 
-      const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes, siteVisitsRes] = await Promise.all([
+      const [ordersRes, itemsRes, repsRes, ratesRes, metalsRes, categoriesRes, gramPricesRes, siteSettingsRes, siteVisitsRes, reviewsRes] = await Promise.all([
         supabase.from("orders").select("*").order("created_at"),
         supabase.from(orderItemsTable).select("*"),
         supabase.from("reps").select("*").order("id"),
@@ -5375,7 +5448,9 @@ export default function JewelryStore() {
         supabase.from("metal_gram_prices").select("*").eq("id", 1).maybeSingle(),
         supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
         supabase.from("site_visits").select("count").eq("id", 1).maybeSingle(),
+        supabase.from("reviews_public").select("*").order("created_at", { ascending: false }),
       ]);
+      if (reviewsRes.data) setReviews(reviewsRes.data);
 
       // عدّاد الزوار: يزيد مرّة واحدة بس لكل متصفح/جهاز (علامة بالـ localStorage تمنع التكرار
       // عند تحديث الصفحة)، وفقط بالمتجر العام (زيارات لوحة الإدارة ما تُحتسب كزوار)
@@ -5499,6 +5574,25 @@ export default function JewelryStore() {
     () => products.filter((p) => favorites.has(p.id)),
     [products, favorites]
   );
+
+  const reviewsByProduct = useMemo(() => {
+    const map = {};
+    reviews.forEach((r) => {
+      if (!map[r.product_id]) map[r.product_id] = [];
+      map[r.product_id].push(r);
+    });
+    return map;
+  }, [reviews]);
+
+  const ratingSummary = (productId) => {
+    const list = reviewsByProduct[productId];
+    if (!list || list.length === 0) return null;
+    const avg = list.reduce((s, r) => s + r.rating, 0) / list.length;
+    return { avg, count: list.length };
+  };
+
+  const hasDeliveredOrderFor = (productId) =>
+    orders.some((o) => o.status === "delivered" && o.items.some((i) => i.id === productId));
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -6100,9 +6194,8 @@ export default function JewelryStore() {
         </div>
       </section>
 
-      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
-      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
-      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
+      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} ratingSummary={ratingSummary} />
+      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} ratingSummary={ratingSummary} />
 
       {/* Category filters */}
       <section id="shop" className="px-5 sm:px-10 pt-6 pb-2">
@@ -6157,6 +6250,12 @@ export default function JewelryStore() {
             <div className="mt-4 flex-1 text-center">
               <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <p className="text-[11px] sm:text-xs mt-1.5 truncate" style={{ color: THEME.ivoryDim }}>{p.mat[lang]}</p>
+              {ratingSummary(p.id) && (
+                <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                  <StarRating value={ratingSummary(p.id).avg} size={10} />
+                  <span className="text-[10px]" style={{ color: THEME.ivoryDim }}>({ratingSummary(p.id).count})</span>
+                </div>
+              )}
               <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
                 <span className="text-sm" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
                 {p.originalPrice > p.price && (
@@ -6195,7 +6294,6 @@ export default function JewelryStore() {
         ))}
       </section>
 
-      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
 
       {/* Most viewed carousel */}
       {mostViewed.length > 0 && (
@@ -6254,7 +6352,6 @@ export default function JewelryStore() {
         </section>
       )}
 
-      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
 
       {/* Footer */}
       <footer className="mt-16 px-5 sm:px-10 py-14 border-t text-center" style={{ borderColor: THEME.surfaceLine, background: THEME.bgSoft }}>
@@ -6394,6 +6491,89 @@ export default function JewelryStore() {
             {selected.sizes && selected.sizes.length > 1 && !selectedSize && (
               <p className="text-[11px] text-center mt-2" style={{ color: THEME.ivoryDim }}>{T.selectSize[lang]}</p>
             )}
+
+            {/* التقييمات: عرض عام + نموذج إضافة تقييم لمن اشترى واستلم هالمنتج فعليًا فقط (verified purchase) */}
+            <div className="mt-8 pt-6 border-t" style={{ borderColor: THEME.surfaceLine }}>
+              <p className="text-center text-[11px] uppercase mb-4" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
+                {T.reviewsTitle[lang]}
+              </p>
+
+              {(() => {
+                const list = reviewsByProduct[selected.id] || [];
+                const summary = ratingSummary(selected.id);
+                return (
+                  <>
+                    {summary && (
+                      <div className="flex items-center justify-center gap-2 mb-5">
+                        <StarRating value={summary.avg} size={15} />
+                        <span className="text-xs" style={{ color: THEME.ivoryDim }}>
+                          {summary.avg.toFixed(1)} ({summary.count})
+                        </span>
+                      </div>
+                    )}
+                    {list.length === 0 ? (
+                      <p className="text-xs text-center mb-5" style={{ color: THEME.ivoryDim }}>{T.noReviewsYet[lang]}</p>
+                    ) : (
+                      <div className="flex flex-col gap-4 mb-6 max-h-56 overflow-y-auto">
+                        {list.map((r) => (
+                          <div key={r.id} className="pb-3 border-b" style={{ borderColor: THEME.surfaceLine }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs" style={{ color: THEME.ivory }}>{r.customer_name}</span>
+                              <StarRating value={r.rating} size={11} />
+                            </div>
+                            {r.comment && <p className="text-xs mt-1.5" style={{ color: THEME.ivoryDim }}>{r.comment}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {(() => {
+                if (!session) return null;
+                const myCustomerId = session.user.id;
+                const alreadyReviewed = (reviewsByProduct[selected.id] || []).some((r) => r.customer_id === myCustomerId);
+                if (alreadyReviewed) {
+                  return <p className="text-xs text-center" style={{ color: THEME.goldSoft }}>{T.alreadyReviewed[lang]}</p>;
+                }
+                if (!hasDeliveredOrderFor(selected.id)) {
+                  return <p className="text-xs text-center" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>{T.reviewEligibilityNote[lang]}</p>;
+                }
+                return (
+                  <div>
+                    <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.writeReview[lang]}</p>
+                    <div className="flex items-center justify-center gap-1.5 mb-3">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button key={n} type="button" onClick={() => { setReviewRatingInput(n); setReviewError(""); }} aria-label={`${n} / 5`}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill={n <= reviewRatingInput ? THEME.goldSoft : "none"} stroke={THEME.goldSoft} strokeWidth="1.4">
+                            <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.6 6.6-.9z" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={reviewCommentInput}
+                      onChange={(e) => setReviewCommentInput(e.target.value)}
+                      placeholder={T.reviewCommentPlaceholder[lang]}
+                      maxLength={500}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-sm text-sm mb-2"
+                      style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                    />
+                    {reviewError && <p className="text-[11px] text-center mb-2" style={{ color: "#E07A7A" }}>{reviewError}</p>}
+                    <button
+                      onClick={() => submitReview(selected.id)}
+                      disabled={reviewSubmitting}
+                      className="w-full py-2.5 rounded-sm text-xs tracking-widest uppercase dr-btn-gold"
+                      style={{ opacity: reviewSubmitting ? 0.6 : 1 }}
+                    >
+                      {T.submitReview[lang]}
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* منتجات ذات صلة: نفس التصنيف، بدون الصنف الحالي — محسوبة محليًا من products المحمّلة أصلًا */}
             {(() => {
