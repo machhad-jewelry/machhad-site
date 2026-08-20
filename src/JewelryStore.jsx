@@ -6003,7 +6003,18 @@ export default function JewelryStore() {
         }}
       >
         <div className="flex items-center justify-between relative">
-          <div className="w-16 sm:w-40 flex-shrink-0" />
+          <div className="hidden sm:flex items-center gap-1 text-xs border rounded-full px-1 py-1" style={{ borderColor: THEME.surfaceLine }}>
+            {["ar", "en", "fr"].map((l) => (
+              <button
+                key={l}
+                onClick={() => setLang(l)}
+                className="px-2 py-1 rounded-full uppercase"
+                style={{ background: lang === l ? THEME.gold : "transparent", color: lang === l ? "#FFFFFF" : THEME.ivoryDim }}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
 
           <img
             src={LOGO_SRC}
@@ -6018,18 +6029,6 @@ export default function JewelryStore() {
           />
 
           <div className="flex items-center gap-4 sm:gap-6">
-            <div className="hidden sm:flex items-center gap-1 text-xs border rounded-full px-1 py-1" style={{ borderColor: THEME.surfaceLine }}>
-              {["ar", "en", "fr"].map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  className="px-2 py-1 rounded-full uppercase"
-                  style={{ background: lang === l ? THEME.gold : "transparent", color: lang === l ? "#FFFFFF" : THEME.ivoryDim }}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
