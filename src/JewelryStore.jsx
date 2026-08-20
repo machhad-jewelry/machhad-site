@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail, Contact } from "lucide-react";
+import { ShoppingBag, X, Plus, CreditCard, Truck, Landmark, Smartphone, Lock, Package, BarChart3, Coins, Boxes, Users, Eye, ChevronLeft, ChevronRight, Tag, Shield, Mic, MicOff, Gem, Type, Mail, Contact, Heart, Search, Home, LayoutGrid } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { supabase } from "./supabaseClient";
 import { downloadInvoicePdf, formatInvoiceNumber } from "./invoicePdf";
@@ -519,12 +519,13 @@ const THEME = {
   bg: "#111111",
   bgSoft: "#1B1B1B",
   surface: "#1A1A1A",
-  surfaceLine: "rgba(255,255,255,0.12)",
-  gold: "#2E5D55",
-  goldSoft: "#7DBFB0",
+  surfaceLine: "rgba(201,162,75,0.16)",
+  gold: "#8C6D2E",
+  goldSoft: "#C9A24B",
+  goldBright: "#E8C468",
   ivory: "#F1EDE6",
   ivoryDim: "#A39C92",
-  garnet: "#C98A73",
+  garnet: "#9A3454",
 };
 
 const CURRENCIES = [
@@ -802,6 +803,15 @@ const T = {
   addToCart: { ar: "أضف إلى السلة", en: "Add to Cart", fr: "Ajouter au Panier" },
   cart: { ar: "السلة", en: "Cart", fr: "Panier" },
   emptyCart: { ar: "سلتك فارغة حاليًا", en: "Your cart is currently empty", fr: "Votre panier est vide" },
+  favorites: { ar: "المفضلة", en: "Favorites", fr: "Favoris" },
+  emptyFavorites: { ar: "لسا ما ضفت أي قطعة للمفضلة", en: "You haven't added any favorites yet", fr: "Vous n'avez pas encore d'articles favoris" },
+  addToFavorites: { ar: "أضف إلى المفضلة", en: "Add to favorites", fr: "Ajouter aux favoris" },
+  removeFromFavorites: { ar: "أزل من المفضلة", en: "Remove from favorites", fr: "Retirer des favoris" },
+  search: { ar: "بحث", en: "Search", fr: "Recherche" },
+  searchPlaceholder: { ar: "ابحث عن قطعة...", en: "Search for a piece...", fr: "Rechercher une pièce..." },
+  searchNoResults: { ar: "ما لقينا نتائج مطابقة", en: "No matching results found", fr: "Aucun résultat trouvé" },
+  navHome: { ar: "الرئيسية", en: "Home", fr: "Accueil" },
+  navCategories: { ar: "التصنيفات", en: "Categories", fr: "Catégories" },
   subtotal: { ar: "الإجمالي", en: "Subtotal", fr: "Sous-total" },
   selectAll: { ar: "تحديد الكل", en: "Select All", fr: "Tout sélectionner" },
   selectItemsNote: { ar: "اختر منتجًا واحدًا على الأقل لإتمام الشراء", en: "Select at least one item to checkout", fr: "Sélectionnez au moins un article pour commander" },
@@ -1343,7 +1353,7 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
         <>
           <div style={{
             position: "absolute", top: "10%", left: "50%", width: "80%", height: "26%",
-            transform: "translateX(-50%)", background: `radial-gradient(circle, ${THEME.gold}22, transparent 70%)`,
+            transform: "translateX(-50%)", background: `radial-gradient(circle, ${THEME.goldSoft}22, transparent 70%)`,
           }} />
           {isString ? <BeadString color={product.color} /> : <Gemstone color={product.color} />}
         </>
@@ -1355,7 +1365,7 @@ function ProductVisual({ product, imageIndex = 0, variant = "thumbnail", autoPla
 // شريط تمرير أفقي عام لمنتجات، معاد استخدامه لكل أقسام الصفحة الرئيسية الجديدة (وصل حديثًا، مميزة،
 // مُوصى بها، رائجة، شوهدت مؤخرًا) — نفس نمط شريط "الأكثر مشاهدة" الحالي المُختبَر مسبقًا، بس كمكوّن
 // عام قابل لإعادة الاستخدام بدل تكرار نفس الـ JSX ٥-٦ مرات
-function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, onOpen }) {
+function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, onOpen, favorites, onToggleFavorite }) {
   const scrollRef = useRef(null);
   if (!products || products.length === 0) return null;
   return (
@@ -1376,7 +1386,20 @@ function ProductCarousel({ title, products, lang, isRTL, displayFont, fmtPrice, 
               style={{ width: 148, scrollSnapAlign: "start" }}
               onClick={() => onOpen(p)}
             >
-              <div className="dr-product-img" style={{ width: 148 }}><ProductVisual product={p} autoPlay /></div>
+              <div className="dr-product-img relative" style={{ width: 148 }}>
+                <ProductVisual product={p} autoPlay />
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    aria-label={favorites?.has(p.id) ? T.removeFromFavorites[lang] : T.addToFavorites[lang]}
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(p.id); }}
+                    className="absolute top-1.5 w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{ [isRTL ? "left" : "right"]: 6, background: "rgba(17,17,17,0.55)", border: `1px solid ${THEME.surfaceLine}` }}
+                  >
+                    <Heart size={13} color={favorites?.has(p.id) ? THEME.garnet : THEME.ivory} fill={favorites?.has(p.id) ? THEME.garnet : "none"} />
+                  </button>
+                )}
+              </div>
               <h3 className="text-xs mt-3 truncate text-center" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                 <span className="text-xs" style={{ color: THEME.ivory }}>{fmtPrice(p.price)}</span>
@@ -1909,7 +1932,7 @@ function AdminAddProduct({ lang, onSave, reps, products, categories, metalGramPr
             className="px-3 rounded-sm border flex-shrink-0"
             style={{
               borderColor: listening ? THEME.gold : THEME.surfaceLine,
-              background: listening ? "rgba(46,93,85,0.15)" : "transparent",
+              background: listening ? "rgba(140,109,46,0.15)" : "transparent",
               opacity: speechSupported ? 1 : 0.4,
               cursor: speechSupported ? "pointer" : "not-allowed",
             }}
@@ -5112,7 +5135,25 @@ export default function JewelryStore() {
   const [customDesignOpen, setCustomDesignOpen] = useState(false);
   const [customerAuthOpen, setCustomerAuthOpen] = useState(false);
   const [customerProfile, setCustomerProfile] = useState(null);
+  const [favorites, setFavorites] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("mh_favorites") || "[]")); } catch { return new Set(); }
+  });
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const mostViewedScrollRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem("mh_favorites", JSON.stringify(Array.from(favorites)));
+  }, [favorites]);
+
+  const toggleFavorite = (id) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const count = T.announceMessages[lang].length;
@@ -5454,6 +5495,20 @@ export default function JewelryStore() {
     [products]
   );
 
+  const favoriteProducts = useMemo(
+    () => products.filter((p) => favorites.has(p.id)),
+    [products, favorites]
+  );
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return products
+      .filter((p) => !p.hidden && p.stock > 0)
+      .filter((p) => [p.name?.ar, p.name?.en, p.name?.fr].some((n) => n && n.toLowerCase().includes(q)))
+      .slice(0, 24);
+  }, [products, searchQuery]);
+
   const [recommendedRows, setRecommendedRows] = useState([]);
   const [trendingRows, setTrendingRows] = useState([]);
   const [recentlyViewedRows, setRecentlyViewedRows] = useState([]);
@@ -5791,7 +5846,7 @@ export default function JewelryStore() {
   }
 
   return (
-    <div dir={isRTL ? "rtl" : "ltr"} lang={lang} style={{ background: THEME.bg, color: THEME.ivory, fontFamily: bodyFont, minHeight: "100vh" }}>
+    <div dir={isRTL ? "rtl" : "ltr"} lang={lang} className="pb-16 sm:pb-0" style={{ background: THEME.bg, color: THEME.ivory, fontFamily: bodyFont, minHeight: "100vh" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@300;400;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Jost:wght@300;400;500;600&display=swap');
         * { box-sizing: border-box; }
@@ -5799,7 +5854,7 @@ export default function JewelryStore() {
         .dr-btn-gold { background: ${THEME.gold}; color: #FFFFFF; border: 1px solid ${THEME.gold}; }
         .dr-btn-gold:hover { background: ${THEME.goldSoft}; border-color: ${THEME.goldSoft}; }
         .dr-card { background: ${THEME.surface}; border: 1px solid ${THEME.surfaceLine}; box-shadow: none; transition: transform .35s ease, box-shadow .35s ease, border-color .35s ease; }
-        .dr-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(28,28,28,0.10); border-color: rgba(46,93,85,0.35); }
+        .dr-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,0.12); border-color: rgba(201,162,75,0.45); }
         .dr-modal { box-shadow: 0 20px 60px rgba(28,28,28,0.22); transform: none !important; }
         .dr-product-img { overflow: hidden; border-radius: 2px; }
         .dr-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
@@ -5889,6 +5944,20 @@ export default function JewelryStore() {
             >
               {CURRENCIES.map((c) => <option key={c.id} value={c.id} style={{ background: THEME.surface }}>{c.id}</option>)}
             </select>
+            <button onClick={() => setSearchOpen(true)} aria-label={T.search[lang]} className="hidden sm:block">
+              <Search size={21} color={THEME.goldSoft} />
+            </button>
+            <button onClick={() => setFavoritesOpen(true)} aria-label={T.favorites[lang]} className="relative hidden sm:block">
+              <Heart size={22} color={THEME.goldSoft} />
+              {favorites.size > 0 && (
+                <span
+                  className="absolute -top-2 -right-2 text-[10px] w-4 h-4 rounded-full flex items-center justify-center"
+                  style={{ background: THEME.garnet, color: "#FFFFFF" }}
+                >
+                  {favorites.size}
+                </span>
+              )}
+            </button>
             <button onClick={() => setCustomerAuthOpen(true)} aria-label={session ? T.myAccount[lang] : T.customerLoginTitle[lang]}>
               {session && customerProfile?.avatar_url ? (
                 <img src={customerProfile.avatar_url} alt="" className="w-[22px] h-[22px] rounded-full object-cover" />
@@ -5932,7 +6001,7 @@ export default function JewelryStore() {
         className="flex flex-col items-center text-center px-6 py-20 sm:py-28 relative"
         style={{ background: THEME.bgSoft }}
       >
-        <div className="dr-hero-glow" style={{ position: "absolute", top: "10%", width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${THEME.gold}14, transparent 70%)` }} />
+        <div className="dr-hero-glow" style={{ position: "absolute", top: "10%", width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${THEME.goldSoft}14, transparent 70%)` }} />
         <img src={LOGO_SRC} alt={T.brand[lang]} className="mb-8 w-52 sm:w-72 h-auto object-contain" />
         <h1 style={{ fontFamily: displayFont, fontSize: "clamp(2rem, 5vw, 3.4rem)", fontWeight: 400, color: THEME.goldSoft, lineHeight: 1.3, letterSpacing: "0.01em" }}>
           {heroTitle[lang]}
@@ -5956,7 +6025,7 @@ export default function JewelryStore() {
 
       {/* Shop by category — بطاقات مرئية، مدخل تصفح إضافي بجانب تبويبات التصنيف النصية بالأسفل (بدون حذفها) */}
       {categories.filter((c) => c.active !== false).length > 0 && (
-        <section className="px-5 sm:px-10 pt-14 pb-2">
+        <section id="mh-categories-section" className="px-5 sm:px-10 pt-14 pb-2">
           <p className="text-center text-[11px] uppercase mb-6" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
             {T.shopByCategory[lang]}
           </p>
@@ -6034,9 +6103,9 @@ export default function JewelryStore() {
         </div>
       </section>
 
-      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
-      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.newArrivals[lang]} products={newArrivalsSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
+      <ProductCarousel title={T.featuredProducts[lang]} products={featuredSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
+      <ProductCarousel title={recommendedForYouTitle} products={recommendedForYouProducts} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
 
       {/* Category filters */}
       <section id="shop" className="px-5 sm:px-10 pt-6 pb-2">
@@ -6076,7 +6145,18 @@ export default function JewelryStore() {
       <section className="px-5 sm:px-10 py-10 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-14">
         {filtered.map((p) => (
           <div key={p.id} className="dr-product group flex flex-col cursor-pointer" onClick={() => openProduct(p)}>
-            <div className="dr-product-img"><ProductVisual product={p} autoPlay /></div>
+            <div className="dr-product-img relative">
+              <ProductVisual product={p} autoPlay />
+              <button
+                type="button"
+                aria-label={favorites.has(p.id) ? T.removeFromFavorites[lang] : T.addToFavorites[lang]}
+                onClick={(e) => { e.stopPropagation(); toggleFavorite(p.id); }}
+                className="absolute top-2 w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ [isRTL ? "left" : "right"]: 8, background: "rgba(17,17,17,0.55)", border: `1px solid ${THEME.surfaceLine}` }}
+              >
+                <Heart size={15} color={favorites.has(p.id) ? THEME.garnet : THEME.ivory} fill={favorites.has(p.id) ? THEME.garnet : "none"} />
+              </button>
+            </div>
             <div className="mt-4 flex-1 text-center">
               <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{p.name[lang]}</h3>
               <p className="text-[11px] sm:text-xs mt-1.5 truncate" style={{ color: THEME.ivoryDim }}>{p.mat[lang]}</p>
@@ -6118,7 +6198,7 @@ export default function JewelryStore() {
         ))}
       </section>
 
-      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.trendingNow[lang]} products={trendingSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
 
       {/* Most viewed carousel */}
       {mostViewed.length > 0 && (
@@ -6177,7 +6257,7 @@ export default function JewelryStore() {
         </section>
       )}
 
-      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} />
+      <ProductCarousel title={T.recentlyViewed[lang]} products={recentlyViewedSection} lang={lang} isRTL={isRTL} displayFont={displayFont} fmtPrice={fmtPrice} onOpen={openProduct} favorites={favorites} onToggleFavorite={toggleFavorite} />
 
       {/* Footer */}
       <footer className="mt-16 px-5 sm:px-10 py-14 border-t text-center" style={{ borderColor: THEME.surfaceLine, background: THEME.bgSoft }}>
@@ -6195,7 +6275,17 @@ export default function JewelryStore() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={() => setSelected(null)}>
           <div className="dr-card dr-modal rounded-sm max-w-md w-full p-6 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <button
+                type="button"
+                aria-label={favorites.has(selected.id) ? T.removeFromFavorites[lang] : T.addToFavorites[lang]}
+                onClick={() => toggleFavorite(selected.id)}
+                className="flex items-center gap-1.5 text-xs"
+                style={{ color: favorites.has(selected.id) ? THEME.garnet : THEME.ivoryDim }}
+              >
+                <Heart size={16} color={favorites.has(selected.id) ? THEME.garnet : THEME.ivoryDim} fill={favorites.has(selected.id) ? THEME.garnet : "none"} />
+                {favorites.has(selected.id) ? T.removeFromFavorites[lang] : T.addToFavorites[lang]}
+              </button>
               <button onClick={() => setSelected(null)}><X size={18} color={THEME.ivoryDim} /></button>
             </div>
             <div
@@ -6261,7 +6351,7 @@ export default function JewelryStore() {
                       style={{
                         borderColor: selectedSize === s ? THEME.gold : THEME.surfaceLine,
                         color: selectedSize === s ? THEME.goldSoft : THEME.ivoryDim,
-                        background: selectedSize === s ? "rgba(46,93,85,0.10)" : "transparent",
+                        background: selectedSize === s ? "rgba(140,109,46,0.10)" : "transparent",
                       }}
                     >
                       {s}
@@ -6336,6 +6426,99 @@ export default function JewelryStore() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {favoritesOpen && (
+        <div className="fixed inset-0 z-50" onClick={() => setFavoritesOpen(false)} style={{ background: "rgba(28,28,28,0.5)" }}>
+          <div
+            className="absolute top-0 h-full w-full sm:w-[440px] p-6 flex flex-col"
+            style={{ [isRTL ? "left" : "right"]: 0, background: THEME.surface, borderInlineStart: `1px solid ${THEME.surfaceLine}`, boxShadow: "0 0 40px rgba(28,28,28,0.12)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 style={{ fontFamily: displayFont, color: THEME.goldSoft, fontSize: "1.3rem" }}>{T.favorites[lang]}</h2>
+              <button onClick={() => setFavoritesOpen(false)}><X size={20} color={THEME.ivoryDim} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4">
+              {favoriteProducts.length === 0 ? (
+                <p className="text-sm text-center mt-10" style={{ color: THEME.ivoryDim }}>{T.emptyFavorites[lang]}</p>
+              ) : (
+                favoriteProducts.map((p) => (
+                  <div key={p.id} className="flex items-start gap-4 border-b pb-5" style={{ borderColor: THEME.surfaceLine }}>
+                    <div
+                      className="w-20 flex-shrink-0 cursor-pointer"
+                      onClick={() => { setFavoritesOpen(false); openProduct(p); }}
+                    >
+                      <ProductVisual product={p} />
+                    </div>
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setFavoritesOpen(false); openProduct(p); }}>
+                      <p className="text-sm truncate" style={{ fontFamily: displayFont, color: THEME.ivory }}>{p.name[lang]}</p>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-sm" style={{ color: THEME.goldSoft }}>{fmtPrice(p.price)}</span>
+                        {p.originalPrice > p.price && (
+                          <>
+                            <span className="text-[11px] line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(p.originalPrice)}</span>
+                            <span className="text-[11px]" style={{ color: THEME.garnet }}>-{Math.round((1 - p.price / p.originalPrice) * 100)}%</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleFavorite(p.id)}
+                      aria-label={T.removeFromFavorites[lang]}
+                      className="p-1 flex-shrink-0"
+                    >
+                      <Heart size={16} color={THEME.garnet} fill={THEME.garnet} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-16 sm:pt-24" style={{ background: "rgba(17,17,17,0.75)" }} onClick={() => { setSearchOpen(false); setSearchQuery(""); }}>
+          <div
+            className="dr-card rounded-sm w-full max-w-lg p-5 max-h-[75vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <Search size={18} color={THEME.ivoryDim} />
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={T.searchPlaceholder[lang]}
+                className="flex-1 bg-transparent outline-none text-sm py-2"
+                style={{ color: THEME.ivory }}
+              />
+              <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }}><X size={18} color={THEME.ivoryDim} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 mt-3">
+              {searchQuery.trim() && searchResults.length === 0 && (
+                <p className="text-sm text-center mt-8" style={{ color: THEME.ivoryDim }}>{T.searchNoResults[lang]}</p>
+              )}
+              <div className="flex flex-col gap-1">
+                {searchResults.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 p-2 rounded-sm cursor-pointer"
+                    onClick={() => { setSearchOpen(false); setSearchQuery(""); openProduct(p); }}
+                  >
+                    <div className="w-12 h-12 flex-shrink-0"><ProductVisual product={p} /></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate" style={{ color: THEME.ivory }}>{p.name[lang]}</p>
+                      <span className="text-xs" style={{ color: THEME.goldSoft }}>{fmtPrice(p.price)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -6521,7 +6704,7 @@ export default function JewelryStore() {
                           className="flex items-center gap-3 px-3 py-2 rounded-sm border text-xs"
                           style={{
                             borderColor: payment === m.id ? THEME.gold : THEME.surfaceLine,
-                            background: payment === m.id ? "rgba(46,93,85,0.10)" : "transparent",
+                            background: payment === m.id ? "rgba(140,109,46,0.10)" : "transparent",
                             color: THEME.ivory,
                           }}
                         >
@@ -6716,6 +6899,73 @@ export default function JewelryStore() {
           onIndexChange={setModalImgIndex}
         />
       )}
+
+      {/* شريط تنقّل سفلي ثابت للموبايل فقط — الديسكتوب بيستخدم أيقونات الهيدر بدلًا منه */}
+      <nav
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-around"
+        style={{ background: THEME.surface, borderTop: `1px solid ${THEME.surfaceLine}`, paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <button
+          className="flex flex-col items-center gap-1 py-2.5 flex-1"
+          onClick={() => { setSelected(null); setFavoritesOpen(false); setSearchOpen(false); setCartOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          aria-label={T.navHome[lang]}
+        >
+          <Home size={19} color={THEME.goldSoft} />
+          <span className="text-[9.5px]" style={{ color: THEME.goldSoft }}>{T.navHome[lang]}</span>
+        </button>
+        <button
+          className="flex flex-col items-center gap-1 py-2.5 flex-1"
+          onClick={() => document.getElementById("mh-categories-section")?.scrollIntoView({ behavior: "smooth" })}
+          aria-label={T.navCategories[lang]}
+        >
+          <LayoutGrid size={19} color={THEME.ivoryDim} />
+          <span className="text-[9.5px]" style={{ color: THEME.ivoryDim }}>{T.navCategories[lang]}</span>
+        </button>
+        <button
+          className="flex flex-col items-center gap-1 py-2.5 flex-1"
+          onClick={() => setSearchOpen(true)}
+          aria-label={T.search[lang]}
+        >
+          <Search size={19} color={THEME.ivoryDim} />
+          <span className="text-[9.5px]" style={{ color: THEME.ivoryDim }}>{T.search[lang]}</span>
+        </button>
+        <button
+          className="flex flex-col items-center gap-1 py-2.5 flex-1 relative"
+          onClick={() => setFavoritesOpen(true)}
+          aria-label={T.favorites[lang]}
+        >
+          <div className="relative">
+            <Heart size={19} color={THEME.ivoryDim} />
+            {favorites.size > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                style={{ background: THEME.garnet, color: "#FFFFFF" }}
+              >
+                {favorites.size}
+              </span>
+            )}
+          </div>
+          <span className="text-[9.5px]" style={{ color: THEME.ivoryDim }}>{T.favorites[lang]}</span>
+        </button>
+        <button
+          className="flex flex-col items-center gap-1 py-2.5 flex-1"
+          onClick={() => setCartOpen(true)}
+          aria-label={T.cart[lang]}
+        >
+          <div className="relative">
+            <ShoppingBag size={19} color={THEME.ivoryDim} />
+            {cartCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                style={{ background: THEME.garnet, color: "#FFFFFF" }}
+              >
+                {cartCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[9.5px]" style={{ color: THEME.ivoryDim }}>{T.cart[lang]}</span>
+        </button>
+      </nav>
     </div>
   );
 }
