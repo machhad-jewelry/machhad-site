@@ -5555,9 +5555,10 @@ export default function JewelryStore() {
     () =>
       products
         .filter((p) => !p.hidden && p.stock > 0 && p.views > 0)
+        .filter((p) => country === "all" || productShipsTo(p, country))
         .sort((a, b) => b.views - a.views)
         .slice(0, 10),
-    [products]
+    [products, country]
   );
 
   // أقسام الصفحة الرئيسية الجديدة (المرحلة ١): وصل حديثًا ومنتجات مميزة تُحسب محليًا من products
@@ -5567,15 +5568,19 @@ export default function JewelryStore() {
     () =>
       products
         .filter((p) => !p.hidden && p.stock > 0)
+        .filter((p) => country === "all" || productShipsTo(p, country))
         .slice()
         .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
         .slice(0, 10),
-    [products]
+    [products, country]
   );
 
   const featuredRaw = useMemo(
-    () => products.filter((p) => !p.hidden && p.stock > 0 && p.featured),
-    [products]
+    () =>
+      products
+        .filter((p) => !p.hidden && p.stock > 0 && p.featured)
+        .filter((p) => country === "all" || productShipsTo(p, country)),
+    [products, country]
   );
 
   const favoriteProducts = useMemo(
