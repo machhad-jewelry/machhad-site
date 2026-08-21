@@ -848,6 +848,12 @@ const T = {
   reviewSubmitFailed: { ar: "تعذّر إرسال التقييم", en: "Could not submit review", fr: "Échec de l'envoi de l'avis" },
   alreadyReviewed: { ar: "شكرًا، قيّمت هالمنتج من قبل", en: "Thanks — you've already reviewed this product", fr: "Merci — vous avez déjà évalué ce produit" },
   reviewEligibilityNote: { ar: "تقدر تكتب تقييمك بعد استلام هالمنتج ضمن طلب سابق", en: "You can review this product after receiving it in a past order", fr: "Vous pourrez évaluer ce produit après l'avoir reçu dans une commande" },
+  descriptionTab: { ar: "الوصف", en: "Description", fr: "Description" },
+  specificationsTab: { ar: "المواصفات", en: "Specifications", fr: "Spécifications" },
+  buyNow: { ar: "اشترِ الآن", en: "Buy Now", fr: "Acheter Maintenant" },
+  youSave: { ar: "وفّرت", en: "You save", fr: "Vous économisez" },
+  zoomHint: { ar: "كبّر", en: "Zoom", fr: "Zoom" },
+  shipsToLabel: { ar: "الشحن", en: "Shipping", fr: "Livraison" },
   popularProducts: { ar: "الأكثر رواجًا", en: "Popular Products", fr: "Produits Populaires" },
   chooseCountry: { ar: "تسوّق حسب البلد", en: "Shop by Country", fr: "Acheter par Pays" },
   allCountries: { ar: "كل البلدان", en: "All Countries", fr: "Tous les Pays" },
@@ -5167,6 +5173,8 @@ export default function JewelryStore() {
   const [selectedCartKeys, setSelectedCartKeys] = useState([]);
   const [selected, setSelected] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
+  const [modalTab, setModalTab] = useState("desc");
+  const [modalQty, setModalQty] = useState(1);
   const [selectedSize, setSelectedSize] = useState(null);
   const [sizeRequest, setSizeRequest] = useState("");
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -5683,6 +5691,8 @@ export default function JewelryStore() {
     setSelectedSize(null);
     setSizeRequest("");
     setLightboxOpen(false);
+    setModalTab("desc");
+    setModalQty(1);
     trackView(product.id);
   };
 
@@ -6367,7 +6377,7 @@ export default function JewelryStore() {
       {/* Product modal */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,28,28,0.55)" }} onClick={() => setSelected(null)}>
-          <div className="dr-card dr-modal rounded-sm max-w-md w-full p-6 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="dr-card dr-modal rounded-sm max-w-md sm:max-w-3xl w-full p-6 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center">
               <button
                 type="button"
@@ -6381,197 +6391,324 @@ export default function JewelryStore() {
               </button>
               <button onClick={() => setSelected(null)}><X size={18} color={THEME.ivoryDim} /></button>
             </div>
-            <div
-              className="w-40 mx-auto"
-              style={{ cursor: selected.images && selected.images.length > 0 ? "zoom-in" : "default" }}
-              onClick={() => {
-                if (selected.images && selected.images.length > 0) {
-                  setLightboxOpen(true);
-                }
-              }}
-            >
-              <ProductVisual product={selected} imageIndex={modalImgIndex} variant="full" priority />
-            </div>
-            {selected.images && selected.images.length > 1 && (
-              <div className="flex justify-center gap-2 mt-3">
-                {selected.images.map((src, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setModalImgIndex(idx)}
-                    className="w-9 h-9 rounded-sm overflow-hidden"
-                    style={{ border: `1px solid ${idx === modalImgIndex ? THEME.gold : THEME.surfaceLine}` }}
-                  >
-                    <img src={selected.thumbnails?.[idx] || src} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </button>
-                ))}
-              </div>
-            )}
-            <h2 className="text-center mt-4 text-lg" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{selected.name[lang]}</h2>
-            <p className="text-center text-xs mt-1" style={{ color: THEME.ivoryDim }}>{T.material[lang]}: {selected.mat[lang]}</p>
-            {selected.barcode && <p className="text-center text-[11px] mt-1" style={{ color: THEME.ivoryDim, opacity: 0.7 }}>{T.barcodeLabel[lang]}: {selected.barcode}</p>}
-            <p className="text-sm mt-4 text-center" style={{ color: THEME.ivory }}>{selected.desc[lang]}</p>
-            <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-              <span style={{ color: THEME.goldSoft }}>{fmtPrice(selected.price)}</span>
-              {selected.originalPrice > selected.price && (
-                <>
-                  <span className="text-sm line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(selected.originalPrice)}</span>
-                  <span className="text-sm" style={{ color: THEME.garnet }}>-{Math.round((1 - selected.price / selected.originalPrice) * 100)}%</span>
-                </>
-              )}
-            </div>
-            {selected.saleMethod === "weight" && selected.weightGrams > 0 && (
-              <p className="text-xs text-center mt-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
-                {T.weightGramsLabel[lang]}: {selected.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(selected, metalGramPrices) || 0)}
-              </p>
-            )}
-            {(selected.beadCount || selected.beadSize) && (
-              <p className="text-xs text-center mt-1" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
-                {selected.beadCount ? `${T.beadCountLabel[lang]}: ${selected.beadCount}` : ""}
-                {selected.beadCount && selected.beadSize ? " · " : ""}
-                {selected.beadSize ? `${T.beadSizeLabel[lang]}: ${selected.beadSize}` : ""}
-              </p>
-            )}
-
-            {selected.sizes && selected.sizes.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {selected.sizes.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setSelectedSize(s)}
-                      className="px-3 py-1.5 rounded-sm text-xs border"
-                      style={{
-                        borderColor: selectedSize === s ? THEME.gold : THEME.surfaceLine,
-                        color: selectedSize === s ? THEME.goldSoft : THEME.ivoryDim,
-                        background: selectedSize === s ? "rgba(140,109,46,0.10)" : "transparent",
-                      }}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-2">
+              {/* المعرض */}
+              <div>
+                <div
+                  className="relative"
+                  style={{ cursor: selected.images && selected.images.length > 0 ? "zoom-in" : "default" }}
+                  onClick={() => {
+                    if (selected.images && selected.images.length > 0) {
+                      setLightboxOpen(true);
+                    }
+                  }}
+                >
+                  <ProductVisual product={selected} imageIndex={modalImgIndex} variant="full" priority />
+                  {selected.images && selected.images.length > 0 && (
+                    <span
+                      className="absolute bottom-2 flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full"
+                      style={{ [isRTL ? "left" : "right"]: 8, background: "rgba(17,17,17,0.6)", color: THEME.ivory, border: `1px solid ${THEME.surfaceLine}` }}
                     >
-                      {s}
-                    </button>
-                  ))}
+                      <Search size={11} />
+                      {T.zoomHint[lang]}
+                    </span>
+                  )}
                 </div>
+                {selected.images && selected.images.length > 1 && (
+                  <div className="flex justify-center gap-2 mt-3">
+                    {selected.images.map((src, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setModalImgIndex(idx)}
+                        className="w-9 h-9 rounded-sm overflow-hidden"
+                        style={{ border: `1px solid ${idx === modalImgIndex ? THEME.gold : THEME.surfaceLine}` }}
+                      >
+                        <img src={selected.thumbnails?.[idx] || src} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
 
-            {(() => {
-              const cat = categories.find((c) => c.id === selected.cat);
-              const canRequestSize = cat?.requiresRingSize && (selected.countries || []).includes("lebanon");
-              if (!canRequestSize) return null;
-              return (
-                <div className="mt-4">
-                  <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.requestDifferentSizeLabel[lang]}</p>
-                  <input
-                    type="text"
-                    value={sizeRequest}
-                    onChange={(e) => setSizeRequest(e.target.value)}
-                    placeholder={T.sizeRequestPlaceholder[lang]}
-                    maxLength={200}
-                    className="w-full px-3 py-2 rounded-sm text-sm"
-                    style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
-                  />
+              {/* معلومات المنتج */}
+              <div>
+                {(() => {
+                  const cat = categories.find((c) => c.id === selected.cat);
+                  return cat ? (
+                    <p className="text-[11px] uppercase mb-1.5" style={{ color: THEME.gold, letterSpacing: "0.16em" }}>{cat.name[lang]}</p>
+                  ) : null;
+                })()}
+                <h2 className="text-lg" style={{ fontFamily: displayFont, color: THEME.goldSoft }}>{selected.name[lang]}</h2>
+
+                {ratingSummary(selected.id) && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <StarRating value={ratingSummary(selected.id).avg} size={12} />
+                    <span className="text-[11px]" style={{ color: THEME.ivoryDim }}>
+                      {ratingSummary(selected.id).avg.toFixed(1)} ({ratingSummary(selected.id).count})
+                    </span>
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <span className="text-lg" style={{ color: THEME.goldSoft }}>{fmtPrice(selected.price)}</span>
+                  {selected.originalPrice > selected.price && (
+                    <>
+                      <span className="text-sm line-through" style={{ color: THEME.ivoryDim }}>{fmtPrice(selected.originalPrice)}</span>
+                      <span className="text-sm" style={{ color: THEME.garnet }}>-{Math.round((1 - selected.price / selected.originalPrice) * 100)}%</span>
+                    </>
+                  )}
                 </div>
-              );
-            })()}
+                {selected.originalPrice > selected.price && (
+                  <p className="text-[11px] mt-1" style={{ color: THEME.garnet }}>{T.youSave[lang]} {fmtPrice(selected.originalPrice - selected.price)}</p>
+                )}
 
-            <button
-              onClick={() => {
-                if (selected.sizes && selected.sizes.length > 1 && !selectedSize) return;
-                addToCart(selected, selectedSize || (selected.sizes && selected.sizes[0]), 1, sizeRequest);
-                setSelected(null);
-                setSelectedSize(null);
-                setSizeRequest("");
-              }}
-              className="w-full mt-5 py-3 rounded-sm text-sm tracking-widest uppercase dr-btn-gold"
-              style={{ opacity: selected.sizes && selected.sizes.length > 1 && !selectedSize ? 0.6 : 1 }}
-            >
-              {T.addToCart[lang]}
-            </button>
-            {selected.sizes && selected.sizes.length > 1 && !selectedSize && (
-              <p className="text-[11px] text-center mt-2" style={{ color: THEME.ivoryDim }}>{T.selectSize[lang]}</p>
-            )}
+                {selected.saleMethod === "weight" && selected.weightGrams > 0 && (
+                  <p className="text-xs mt-2" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
+                    {T.weightGramsLabel[lang]}: {selected.weightGrams}{T.gramLabelShort[lang]} · {T.perGramLabel[lang]}: {fmtPrice(metalGramRateFor(selected, metalGramPrices) || 0)}
+                  </p>
+                )}
+                {(selected.beadCount || selected.beadSize) && (
+                  <p className="text-xs mt-2" style={{ color: THEME.ivoryDim, opacity: 0.8 }}>
+                    {selected.beadCount ? `${T.beadCountLabel[lang]}: ${selected.beadCount}` : ""}
+                    {selected.beadCount && selected.beadSize ? " · " : ""}
+                    {selected.beadSize ? `${T.beadSizeLabel[lang]}: ${selected.beadSize}` : ""}
+                  </p>
+                )}
 
-            {/* التقييمات: عرض عام + نموذج إضافة تقييم لمن اشترى واستلم هالمنتج فعليًا فقط (verified purchase) */}
-            <div className="mt-8 pt-6 border-t" style={{ borderColor: THEME.surfaceLine }}>
-              <p className="text-center text-[11px] uppercase mb-4" style={{ color: THEME.ivoryDim, letterSpacing: "0.2em" }}>
-                {T.reviewsTitle[lang]}
-              </p>
-
-              {(() => {
-                const list = reviewsByProduct[selected.id] || [];
-                const summary = ratingSummary(selected.id);
-                return (
-                  <>
-                    {summary && (
-                      <div className="flex items-center justify-center gap-2 mb-5">
-                        <StarRating value={summary.avg} size={15} />
-                        <span className="text-xs" style={{ color: THEME.ivoryDim }}>
-                          {summary.avg.toFixed(1)} ({summary.count})
-                        </span>
-                      </div>
-                    )}
-                    {list.length === 0 ? (
-                      <p className="text-xs text-center mb-5" style={{ color: THEME.ivoryDim }}>{T.noReviewsYet[lang]}</p>
-                    ) : (
-                      <div className="flex flex-col gap-4 mb-6 max-h-56 overflow-y-auto">
-                        {list.map((r) => (
-                          <div key={r.id} className="pb-3 border-b" style={{ borderColor: THEME.surfaceLine }}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs" style={{ color: THEME.ivory }}>{r.customer_name}</span>
-                              <StarRating value={r.rating} size={11} />
-                            </div>
-                            {r.comment && <p className="text-xs mt-1.5" style={{ color: THEME.ivoryDim }}>{r.comment}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-
-              {(() => {
-                if (!session) return null;
-                const myCustomerId = session.user.id;
-                const alreadyReviewed = (reviewsByProduct[selected.id] || []).some((r) => r.customer_id === myCustomerId);
-                if (alreadyReviewed) {
-                  return <p className="text-xs text-center" style={{ color: THEME.goldSoft }}>{T.alreadyReviewed[lang]}</p>;
-                }
-                if (!hasDeliveredOrderFor(selected.id)) {
-                  return <p className="text-xs text-center" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>{T.reviewEligibilityNote[lang]}</p>;
-                }
-                return (
-                  <div>
-                    <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.writeReview[lang]}</p>
-                    <div className="flex items-center justify-center gap-1.5 mb-3">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button key={n} type="button" onClick={() => { setReviewRatingInput(n); setReviewError(""); }} aria-label={`${n} / 5`}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill={n <= reviewRatingInput ? THEME.goldSoft : "none"} stroke={THEME.goldSoft} strokeWidth="1.4">
-                            <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.6 6.6-.9z" />
-                          </svg>
+                {selected.sizes && selected.sizes.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.sizeLabel[lang]}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selected.sizes.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setSelectedSize(s)}
+                          className="px-3 py-1.5 rounded-sm text-xs border"
+                          style={{
+                            borderColor: selectedSize === s ? THEME.gold : THEME.surfaceLine,
+                            color: selectedSize === s ? THEME.goldSoft : THEME.ivoryDim,
+                            background: selectedSize === s ? "rgba(140,109,46,0.10)" : "transparent",
+                          }}
+                        >
+                          {s}
                         </button>
                       ))}
                     </div>
-                    <textarea
-                      value={reviewCommentInput}
-                      onChange={(e) => setReviewCommentInput(e.target.value)}
-                      placeholder={T.reviewCommentPlaceholder[lang]}
-                      maxLength={500}
-                      rows={2}
-                      className="w-full px-3 py-2 rounded-sm text-sm mb-2"
-                      style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
-                    />
-                    {reviewError && <p className="text-[11px] text-center mb-2" style={{ color: "#E07A7A" }}>{reviewError}</p>}
-                    <button
-                      onClick={() => submitReview(selected.id)}
-                      disabled={reviewSubmitting}
-                      className="w-full py-2.5 rounded-sm text-xs tracking-widest uppercase dr-btn-gold"
-                      style={{ opacity: reviewSubmitting ? 0.6 : 1 }}
-                    >
-                      {T.submitReview[lang]}
-                    </button>
                   </div>
-                );
-              })()}
+                )}
+
+                {(() => {
+                  const cat = categories.find((c) => c.id === selected.cat);
+                  const canRequestSize = cat?.requiresRingSize && (selected.countries || []).includes("lebanon");
+                  if (!canRequestSize) return null;
+                  return (
+                    <div className="mt-4">
+                      <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.requestDifferentSizeLabel[lang]}</p>
+                      <input
+                        type="text"
+                        value={sizeRequest}
+                        onChange={(e) => setSizeRequest(e.target.value)}
+                        placeholder={T.sizeRequestPlaceholder[lang]}
+                        maxLength={200}
+                        className="w-full px-3 py-2 rounded-sm text-sm"
+                        style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                      />
+                    </div>
+                  );
+                })()}
+
+                <div className="mt-4">
+                  <p className="text-xs mb-2" style={{ color: THEME.ivoryDim }}>{T.quantity[lang]}</p>
+                  <div className="inline-flex items-center border rounded-sm" style={{ borderColor: THEME.surfaceLine, direction: "ltr" }}>
+                    <button type="button" onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center text-sm" style={{ color: THEME.ivory }}>−</button>
+                    <span className="w-9 text-center text-sm" style={{ color: THEME.ivory, fontFamily: "'JetBrains Mono', monospace" }}>{modalQty}</span>
+                    <button type="button" onClick={() => setModalQty((q) => Math.min(selected.stock || 1, q + 1))} className="w-9 h-9 flex items-center justify-center text-sm" style={{ color: THEME.ivory }}>+</button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-5">
+                  <button
+                    onClick={() => {
+                      if (selected.sizes && selected.sizes.length > 1 && !selectedSize) return;
+                      addToCart(selected, selectedSize || (selected.sizes && selected.sizes[0]), modalQty, sizeRequest);
+                      setSelected(null);
+                      setSelectedSize(null);
+                      setSizeRequest("");
+                    }}
+                    className="flex-1 py-3 rounded-sm text-xs tracking-widest uppercase dr-btn-gold"
+                    style={{ opacity: selected.sizes && selected.sizes.length > 1 && !selectedSize ? 0.6 : 1 }}
+                  >
+                    {T.addToCart[lang]}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selected.sizes && selected.sizes.length > 1 && !selectedSize) return;
+                      addToCart(selected, selectedSize || (selected.sizes && selected.sizes[0]), modalQty, sizeRequest);
+                      setSelected(null);
+                      setSelectedSize(null);
+                      setSizeRequest("");
+                      setCartOpen(true);
+                    }}
+                    className="flex-1 py-3 rounded-sm text-xs tracking-widest uppercase border"
+                    style={{ borderColor: THEME.gold, color: THEME.goldSoft, opacity: selected.sizes && selected.sizes.length > 1 && !selectedSize ? 0.6 : 1 }}
+                  >
+                    {T.buyNow[lang]}
+                  </button>
+                </div>
+                {selected.sizes && selected.sizes.length > 1 && !selectedSize && (
+                  <p className="text-[11px] mt-2" style={{ color: THEME.ivoryDim }}>{T.selectSize[lang]}</p>
+                )}
+              </div>
+            </div>
+
+            {/* تبويبات: الوصف / المواصفات / التقييمات */}
+            <div className="mt-8 pt-5 border-t" style={{ borderColor: THEME.surfaceLine }}>
+              <div className="flex gap-6 justify-center border-b" style={{ borderColor: THEME.surfaceLine }}>
+                {[
+                  { id: "desc", label: T.descriptionTab[lang] },
+                  { id: "specs", label: T.specificationsTab[lang] },
+                  { id: "reviews", label: T.reviewsTitle[lang] },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setModalTab(t.id)}
+                    className="text-xs pb-2.5"
+                    style={{
+                      color: modalTab === t.id ? THEME.goldSoft : THEME.ivoryDim,
+                      borderBottom: modalTab === t.id ? `2px solid ${THEME.gold}` : "2px solid transparent",
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-5">
+                {modalTab === "desc" && (
+                  <p className="text-sm text-center" style={{ color: THEME.ivory }}>{selected.desc[lang]}</p>
+                )}
+
+                {modalTab === "specs" && (
+                  <div className="flex flex-col gap-2.5 max-w-xs mx-auto">
+                    <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                      <span>{T.material[lang]}</span><span style={{ color: THEME.ivory }}>{selected.mat[lang]}</span>
+                    </div>
+                    {selected.barcode && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.barcodeLabel[lang]}</span><span style={{ color: THEME.ivory }}>{selected.barcode}</span>
+                      </div>
+                    )}
+                    {selected.saleMethod === "weight" && selected.weightGrams > 0 && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.weightGramsLabel[lang]}</span><span style={{ color: THEME.ivory }}>{selected.weightGrams}{T.gramLabelShort[lang]}</span>
+                      </div>
+                    )}
+                    {selected.beadCount && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.beadCountLabel[lang]}</span><span style={{ color: THEME.ivory }}>{selected.beadCount}</span>
+                      </div>
+                    )}
+                    {selected.beadSize && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.beadSizeLabel[lang]}</span><span style={{ color: THEME.ivory }}>{selected.beadSize}</span>
+                      </div>
+                    )}
+                    {selected.sizes && selected.sizes.length > 0 && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.sizeLabel[lang]}</span><span style={{ color: THEME.ivory }}>{selected.sizes.join(" · ")}</span>
+                      </div>
+                    )}
+                    {selected.countries && selected.countries.length > 0 && (
+                      <div className="flex justify-between text-xs" style={{ color: THEME.ivoryDim }}>
+                        <span>{T.shipsToLabel[lang]}</span>
+                        <span style={{ color: THEME.ivory }}>
+                          {selected.countries.map((cid) => COUNTRIES.find((c) => c.id === cid)?.[lang]).filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {modalTab === "reviews" && (
+                  <div>
+                    {(() => {
+                      const list = reviewsByProduct[selected.id] || [];
+                      const summary = ratingSummary(selected.id);
+                      return (
+                        <>
+                          {summary && (
+                            <div className="flex items-center justify-center gap-2 mb-5">
+                              <StarRating value={summary.avg} size={15} />
+                              <span className="text-xs" style={{ color: THEME.ivoryDim }}>
+                                {summary.avg.toFixed(1)} ({summary.count})
+                              </span>
+                            </div>
+                          )}
+                          {list.length === 0 ? (
+                            <p className="text-xs text-center mb-5" style={{ color: THEME.ivoryDim }}>{T.noReviewsYet[lang]}</p>
+                          ) : (
+                            <div className="flex flex-col gap-4 mb-6 max-h-56 overflow-y-auto">
+                              {list.map((r) => (
+                                <div key={r.id} className="pb-3 border-b" style={{ borderColor: THEME.surfaceLine }}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs" style={{ color: THEME.ivory }}>{r.customer_name}</span>
+                                    <StarRating value={r.rating} size={11} />
+                                  </div>
+                                  {r.comment && <p className="text-xs mt-1.5" style={{ color: THEME.ivoryDim }}>{r.comment}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {(() => {
+                      if (!session) return null;
+                      const myCustomerId = session.user.id;
+                      const alreadyReviewed = (reviewsByProduct[selected.id] || []).some((r) => r.customer_id === myCustomerId);
+                      if (alreadyReviewed) {
+                        return <p className="text-xs text-center" style={{ color: THEME.goldSoft }}>{T.alreadyReviewed[lang]}</p>;
+                      }
+                      if (!hasDeliveredOrderFor(selected.id)) {
+                        return <p className="text-xs text-center" style={{ color: THEME.ivoryDim, opacity: 0.75 }}>{T.reviewEligibilityNote[lang]}</p>;
+                      }
+                      return (
+                        <div>
+                          <p className="text-xs text-center mb-2" style={{ color: THEME.ivoryDim }}>{T.writeReview[lang]}</p>
+                          <div className="flex items-center justify-center gap-1.5 mb-3">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button key={n} type="button" onClick={() => { setReviewRatingInput(n); setReviewError(""); }} aria-label={`${n} / 5`}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill={n <= reviewRatingInput ? THEME.goldSoft : "none"} stroke={THEME.goldSoft} strokeWidth="1.4">
+                                  <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.6 6.6-.9z" />
+                                </svg>
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={reviewCommentInput}
+                            onChange={(e) => setReviewCommentInput(e.target.value)}
+                            placeholder={T.reviewCommentPlaceholder[lang]}
+                            maxLength={500}
+                            rows={2}
+                            className="w-full px-3 py-2 rounded-sm text-sm mb-2"
+                            style={{ background: THEME.bgSoft, border: `1px solid ${THEME.surfaceLine}`, color: THEME.ivory }}
+                          />
+                          {reviewError && <p className="text-[11px] text-center mb-2" style={{ color: "#E07A7A" }}>{reviewError}</p>}
+                          <button
+                            onClick={() => submitReview(selected.id)}
+                            disabled={reviewSubmitting}
+                            className="w-full py-2.5 rounded-sm text-xs tracking-widest uppercase dr-btn-gold"
+                            style={{ opacity: reviewSubmitting ? 0.6 : 1 }}
+                          >
+                            {T.submitReview[lang]}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* منتجات ذات صلة: نفس التصنيف، بدون الصنف الحالي — محسوبة محليًا من products المحمّلة أصلًا */}
