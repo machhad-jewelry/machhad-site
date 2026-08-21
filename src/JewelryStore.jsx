@@ -5612,9 +5612,10 @@ export default function JewelryStore() {
     if (!q) return [];
     return products
       .filter((p) => !p.hidden && p.stock > 0)
+      .filter((p) => country === "all" || productShipsTo(p, country))
       .filter((p) => [p.name?.ar, p.name?.en, p.name?.fr].some((n) => n && n.toLowerCase().includes(q)))
       .slice(0, 24);
-  }, [products, searchQuery]);
+  }, [products, searchQuery, country]);
 
   const [recommendedRows, setRecommendedRows] = useState([]);
   const [trendingRows, setTrendingRows] = useState([]);
@@ -6720,6 +6721,7 @@ export default function JewelryStore() {
             {(() => {
               const related = products
                 .filter((p) => p.id !== selected.id && p.cat === selected.cat && !p.hidden && p.stock > 0)
+                .filter((p) => country === "all" || productShipsTo(p, country))
                 .slice(0, 8);
               if (related.length === 0) return null;
               return (
